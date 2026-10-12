@@ -1,0 +1,1 @@
+install: streamlit, pandas, openpyxl

@@ -88,7 +88,7 @@ def get_book_styled(book_name):
         return '<span style="color:#1493FF; font-weight:bold;">FanDuel</span>'
     return f"<span>{b}</span>"
 
-# Number & Percentage Formatters
+# Percentage & Decimal Formatters
 def format_percentage(val, is_ev=False):
     if pd.isna(val) or val == "-" or not isinstance(val, (int, float)):
         return val
@@ -100,6 +100,12 @@ def format_clean_decimal(val):
         return val
     f_val = float(val)
     return f"{int(f_val)}" if f_val.is_integer() else f"{f_val:.1f}"
+
+# Best Line Badge Generator
+def get_best_line_badge_html(line_adv_note):
+    if line_adv_note:
+        return f'<span style="background-color:#FEF3C7; color:#92400E; padding:3px 8px; border-radius:12px; font-weight:bold; font-size:11px; border:1px solid #F59E0B; margin-left:6px;">{line_adv_note}</span>'
+    return ""
 
 # --------------------------------------------------------------------------
 # SIDEBAR NAVIGATION
@@ -122,7 +128,7 @@ app_mode = st.sidebar.radio(
 excel_data = pd.ExcelFile(file_path)
 
 # ==============================================================================
-# DATA LOADER FOR VISUALIZERS (STRICT SPORTSBOOK ISOLATION)
+# DATA LOADER & BEST LINE ADVANTAGE CALCULATOR
 # ==============================================================================
 def load_visualizer_data(target_sheets):
     all_rows = []
@@ -133,7 +139,6 @@ def load_visualizer_data(target_sheets):
         p_col = next((c for c in sub_df.columns if c.strip().lower() == "player"), None)
         if p_col and not sub_df.empty:
             sub_df["Player"] = sub_df[p_col]
-            # Strictly identify sportsbook (No Passing/Rushing names)
             if "DK" in sheet: sub_df["Book"] = "DraftKings"
             elif "FD" in sheet: sub_df["Book"] = "FanDuel"
             else:
@@ -145,12 +150,51 @@ def load_visualizer_data(target_sheets):
         return pd.DataFrame()
     return pd.concat(all_rows, ignore_index=True)
 
+def tag_best_line_advantages(df):
+    if df.empty:
+        return df
+    
+    df["Is_Best_Line"] = False
+    df["Line_Adv_Note"] = ""
+
+    # Parse numeric EV
+    def parse_ev_float(v):
+        try: return float(v)
+        except: return -1.0
+    
+    df["_ev_num"] = df["EV"].apply(parse_ev_float)
+
+    # Compare books per Player and Prop
+    for (p_name, prop_n), grp in df.groupby(["Player", "Prop Name"]):
+        if len(grp) > 1:
+            side = grp["Pick"].iloc[0]
+            if side == "Over":
+                min_line = grp["Vegas Line"].min()
+                candidates = grp[grp["Vegas Line"] == min_line]
+                best_idx = candidates["_ev_num"].idxmax()
+                diff = grp["Vegas Line"].max() - min_line
+                df.loc[best_idx, "Is_Best_Line"] = True
+                df.loc[best_idx, "Line_Adv_Note"] = f"⭐ BEST LINE (+{diff:.1f} adv)" if diff > 0 else "⭐ BEST ODDS"
+            else:
+                max_line = grp["Vegas Line"].max()
+                candidates = grp[grp["Vegas Line"] == max_line]
+                best_idx = candidates["_ev_num"].idxmax()
+                diff = max_line - grp["Vegas Line"].min()
+                df.loc[best_idx, "Is_Best_Line"] = True
+                df.loc[best_idx, "Line_Adv_Note"] = f"⭐ BEST LINE (+{diff:.1f} adv)" if diff > 0 else "⭐ BEST ODDS"
+        elif len(grp) == 1:
+            idx = grp.index[0]
+            if grp.loc[idx, "_ev_num"] >= 0.05:
+                df.loc[idx, "Is_Best_Line"] = True
+                df.loc[idx, "Line_Adv_Note"] = "⭐ TOP VALUE"
+
+    return df
+
 # Common Render Function for Visualizers
 def render_prop_visualizer(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
 
-    # Filter Controls
     f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
     with f_col1:
         team_list = ["All Teams"] + sorted(combined_df[team_col].dropna().astype(str).unique().tolist()) if team_col else ["All Teams"]
@@ -214,7 +258,10 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         st.info("No props matching these filter criteria.")
         return
 
-    props_df = pd.DataFrame(prop_rows).drop_duplicates(subset=["Player", "Prop Label", "Vegas Line"])
+    raw_props_df = pd.DataFrame(prop_rows).drop_duplicates(subset=["Player", "Prop Label", "Vegas Line"])
+
+    # Calculate Line Advantage
+    props_df = tag_best_line_advantages(raw_props_df)
 
     if selected_prop_filter == "Yards Only":
         props_df = props_df[props_df["Prop Name"].str.contains("Yds|Yards", case=False, na=False)]
@@ -244,7 +291,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 st.markdown(f"## {player} — {team_tag} **{player_depth_label}**")
                 st.caption(f"Props Available: {len(p_props)}")
 
-            # Scorecards
+            # Scorecards with ⭐ Best Line Advantage Badging
             cols_per_row = 3
             for i in range(0, len(p_props), cols_per_row):
                 batch = p_props.iloc[i:i + cols_per_row]
@@ -253,7 +300,8 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                     with cols[c_idx]:
                         with st.container(border=True):
                             b_html = get_book_styled(r['Book'])
-                            st.markdown(f"#### 📌 {r['Prop Name']} [{b_html}]", unsafe_allow_html=True)
+                            star_badge = get_best_line_badge_html(r['Line_Adv_Note'])
+                            st.markdown(f"#### 📌 {r['Prop Name']} [{b_html}] {star_badge}", unsafe_allow_html=True)
                             st.markdown(f"**Pick:** `{r['Pick']}` | **Action:** `{r['Action']}`")
                             m1, m2 = st.columns(2)
                             m1.metric("Vegas Line", format_clean_decimal(r['Vegas Line']))
@@ -262,9 +310,11 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                             m3.metric("Win Prob", r['Win Prob'])
                             m4.metric("EV Edge", r['EV'])
 
-            # Visual 1: Horizontal Edge Chart (With clean spacing)
+            # Visual 1: Horizontal Edge Chart (With Star on Best Book)
             st.markdown("#### ⚡ Model Edge / Margin vs. Vegas Line")
-            edge_df = p_props.groupby("Prop Label", as_index=False).first()
+            
+            edge_df = p_props.groupby("Prop Label", as_index=False).first().copy()
+            edge_df["Chart_Label"] = edge_df.apply(lambda row: f"⭐ {row['Prop Label']}" if row['Is_Best_Line'] else row['Prop Label'], axis=1)
             edge_df["Edge Color"] = edge_df["Margin"].apply(lambda m: "Over Edge" if m >= 0 else "Under Edge")
 
             max_m = max(abs(edge_df["Margin"].max()), abs(edge_df["Margin"].min()), 1.0)
@@ -273,7 +323,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             bars_edge = alt.Chart(edge_df).mark_bar(
                 size=16, cornerRadiusTopRight=4, cornerRadiusBottomRight=4, cornerRadiusTopLeft=4, cornerRadiusBottomLeft=4
             ).encode(
-                y=alt.Y("Prop Label:N", title=None, sort="-x", scale=alt.Scale(paddingInner=0.55, paddingOuter=0.35), axis=alt.Axis(offset=15, labelPadding=12, labelLimit=220)),
+                y=alt.Y("Chart_Label:N", title=None, sort="-x", scale=alt.Scale(paddingInner=0.55, paddingOuter=0.35), axis=alt.Axis(offset=15, labelPadding=12, labelLimit=240)),
                 x=alt.X("Margin:Q", title="Model Advantage (Margin vs. Line)", scale=alt.Scale(domain=x_domain)),
                 color=alt.Color("Edge Color:N", scale=alt.Scale(domain=["Over Edge", "Under Edge"], range=["#10B981", "#EF4444"]), legend=alt.Legend(title=None, orient="top"))
             )
@@ -282,12 +332,12 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 align=alt.expr("datum.Margin >= 0 ? 'left' : 'right'"),
                 dx=alt.expr("datum.Margin >= 0 ? 8 : -8"),
                 fontSize=11, fontWeight="bold"
-            ).encode(y=alt.Y("Prop Label:N", sort="-x"), x=alt.X("Margin:Q"), text=alt.Text("Margin:Q", format="+.1f"))
+            ).encode(y=alt.Y("Chart_Label:N", sort="-x"), x=alt.X("Margin:Q"), text=alt.Text("Margin:Q", format="+.1f"))
 
             zero_line = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color="#4A5568", strokeDash=[3, 3]).encode(x="x:Q")
             st.altair_chart((bars_edge + text_edge + zero_line).properties(height=alt.Step(42)), use_container_width=True)
 
-            # Visual 2: Hit Rate Chart (Headroom fixed so line never cuts text)
+            # Visual 2: Hit Rate Chart
             st.markdown("#### 📈 Rolling Hit Rate & Game Trend (Last 5 Games)")
             has_l5 = False
             for _, r_prop in p_props.iterrows():
@@ -295,6 +345,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 cur_line = r_prop["Vegas Line"]
                 book_tag = r_prop["Book"]
                 p_label = r_prop["Prop Name"]
+                adv_tag = f" — {r_prop['Line_Adv_Note']}" if r_prop['Line_Adv_Note'] else ""
 
                 if last_5_raw and last_5_raw not in ["-", "nan", ""]:
                     try: stats_list = [float(x.strip()) for x in last_5_raw.split(",") if x.strip()]
@@ -313,9 +364,8 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                         hit_pct = round((hits / len(t_df)) * 100)
 
                         b_html = get_book_styled(book_tag)
-                        st.markdown(f"**📌 {p_label} [{b_html}] — Line: `{format_clean_decimal(cur_line)}` | Hit Rate: `{hits}/{len(t_df)} ({hit_pct}%)`**", unsafe_allow_html=True)
+                        st.markdown(f"**📌 {p_label} [{b_html}]{adv_tag} — Line: `{format_clean_decimal(cur_line)}` | Hit Rate: `{hits}/{len(t_df)} ({hit_pct}%)`**", unsafe_allow_html=True)
 
-                        # Headroom buffer so dashed line never collides with numbers
                         y_max = max(max(t_df["Value"]), cur_line) * 1.30
 
                         hit_bars = alt.Chart(t_df).mark_bar(size=26, cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
@@ -364,14 +414,11 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
     if all_curated.empty:
         st.warning("No plays available.")
     else:
-        # Extract pure EV
         def parse_ev_num(v):
             try: return float(v)
             except: return -1.0
             
         all_curated["_ev_val"] = all_curated["EV"].apply(parse_ev_num)
-        
-        # High-Conviction Criteria: MAX BET, DUAL CONFIRMED, ANCHOR, or EV >= 6%
         best_plays = all_curated[
             all_curated["Action"].astype(str).str.contains("MAX|DUAL|ANCHOR|STRONG", case=False, na=False) |
             (all_curated["_ev_val"] >= 0.06)
@@ -417,7 +464,7 @@ elif app_mode == "📋 Master EV Tables":
                 st.info("No data in this sheet.")
                 continue
 
-            # TOP-LINE FILTERS FOR TABLE
+            # TOP-LINE FILTERS
             tf1, tf2, tf3, tf4, tf5 = st.columns([1, 1, 1, 1, 2])
             with tf1:
                 t_list = ["All Teams"] + sorted(df["Team"].dropna().astype(str).unique().tolist()) if "Team" in df.columns else ["All Teams"]
@@ -449,7 +496,6 @@ elif app_mode == "📋 Master EV Tables":
                 mask = df.astype(str).apply(lambda row: row.str.contains(f_search, case=False).any(), axis=1)
                 df = df[mask]
 
-            # Format percentages and clean decimals
             for col in df.columns:
                 if "EV" in col or "Market EV" in col:
                     df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=True))

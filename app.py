@@ -4,6 +4,7 @@ import os
 import re
 from datetime import datetime
 import altair as alt
+import requests
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
@@ -36,9 +37,27 @@ if not dated_files:
     st.info("👋 No dated spreadsheets (e.g. 10-9-26.xlsx) found in `./data`. Push a slate from Colab to begin!")
     st.stop()
 
-# Sort chronologically (newest first)
 dated_files.sort(key=lambda x: x["date"], reverse=True)
 latest_file = dated_files[0]["filename"]
+
+# --------------------------------------------------------------------------
+# 2. OFFICIAL NFL HEADSHOT FETCHER (CACHED)
+# --------------------------------------------------------------------------
+@st.cache_data(ttl=86400)
+def get_player_headshot_url(player_name):
+    try:
+        clean_name = player_name.strip().replace(" ", "%20")
+        url = f"https://site.web.api.espn.com/apis/common/v3/search?region=us&lang=en&query={clean_name}&limit=1&type=player"
+        r = requests.get(url, timeout=3)
+        if r.status_code == 200:
+            items = r.json().get("items", [])
+            if items:
+                img = items[0].get("images", [{}])[0].get("url")
+                if img: return img
+    except:
+        pass
+    # Fallback to standard NFL silhouette
+    return "https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/default.png&w=150&h=150"
 
 # --------------------------------------------------------------------------
 # SIDEBAR NAVIGATION
@@ -110,12 +129,11 @@ if app_mode == "📋 Master EV Tables":
             st.dataframe(df.style.apply(highlight_actions, axis=1), use_container_width=True, height=550)
 
 # ==============================================================================
-# SCREEN 2: PRO BETTING VISUALIZER (HIT RATES & MARGIN EDGES)
+# SCREEN 2: PRO BETTING VISUALIZER (WITH HEADSHOTS & FIXED LABELS)
 # ==============================================================================
 elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
     st.title("📊 Pro Betting Visualizer")
 
-    # Extract all betting records across sheets
     all_player_rows = []
     for sheet in excel_data.sheet_names:
         if sheet == "How To Use":
@@ -140,7 +158,6 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
 
-    # Filter Controls
     f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
     with f_col1:
         team_list = ["All Teams"] + sorted(combined_df[team_col].dropna().astype(str).unique().tolist()) if team_col else ["All Teams"]
@@ -214,7 +231,7 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
         st.stop()
 
     # --------------------------------------------------------------------------
-    # STACKED BREAKDOWNS PER PLAYER
+    # STACKED BREAKDOWNS PER PLAYER WITH HEADSHOTS
     # --------------------------------------------------------------------------
     unique_players = sorted(props_df["Player"].unique())
 
@@ -223,7 +240,14 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
         team_tag = player_props["Team"].iloc[0] if not player_props.empty else ""
 
         with st.container(border=True):
-            st.markdown(f"## 👤 {player} ({team_tag})")
+            # Header with Player Headshot
+            headshot_url = get_player_headshot_url(player)
+            h_col1, h_col2 = st.columns([1, 6])
+            with h_col1:
+                st.image(headshot_url, width=90)
+            with h_col2:
+                st.markdown(f"## {player}")
+                st.caption(f"🏈 **Team:** {team_tag} | Active Props: {len(player_props)}")
 
             # Scorecards
             cols_per_row = 3
@@ -243,16 +267,17 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
                             m4.metric("EV Edge", r['EV'])
 
             # ------------------------------------------------------------------
-            # VISUAL 1: HORIZONTAL EDGE / MARGIN BAR CHART
+            # VISUAL 1: CLEAN HORIZONTAL EDGE BAR CHART (NO OVERLAP)
             # ------------------------------------------------------------------
             st.markdown("#### ⚡ Model Edge / Margin vs. Vegas Line")
             st.caption("Green bars extend right (Model Over) | Red bars extend left (Model Under)")
 
-            edge_df = player_props.copy()
+            # Deduplicate strictly for charting to prevent double-printed text marks
+            edge_df = player_props.drop_duplicates(subset=["Prop Label"]).copy()
             edge_df["Edge Color"] = edge_df["Margin"].apply(lambda m: "Over Edge" if m >= 0 else "Under Edge")
 
-            bars_edge = alt.Chart(edge_df).mark_bar(size=20, cornerRadiusTopLeft=3, cornerRadiusBottomLeft=3).encode(
-                y=alt.Y("Prop Label:N", title=None, sort="-x"),
+            bars_edge = alt.Chart(edge_df).mark_bar(size=18, cornerRadiusTopLeft=3, cornerRadiusBottomLeft=3).encode(
+                y=alt.Y("Prop Label:N", title=None, sort="-x", axis=alt.Axis(labelLimit=200)),
                 x=alt.X("Margin:Q", title="Model Advantage (Margin vs. Line)"),
                 color=alt.Color(
                     "Edge Color:N",
@@ -261,9 +286,10 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
                 )
             )
 
+            # Clean outer text label (Never collides with axis or bar)
             text_edge = alt.Chart(edge_df).mark_text(
                 align=alt.expr("datum.Margin >= 0 ? 'left' : 'right'"),
-                dx=alt.expr("datum.Margin >= 0 ? 5 : -5"),
+                dx=alt.expr("datum.Margin >= 0 ? 8 : -8"),
                 fontSize=11,
                 fontWeight="bold"
             ).encode(
@@ -272,8 +298,8 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
                 text=alt.Text("Margin:Q", format="+.1f")
             )
 
-            zero_line = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color="#4A5568", strokeDash=[2, 2]).encode(x="x:Q")
-            chart_edge_final = (bars_edge + text_edge + zero_line).properties(height=max(120, len(edge_df) * 35))
+            zero_line = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color="#4A5568", strokeDash=[3, 3]).encode(x="x:Q")
+            chart_edge_final = (bars_edge + text_edge + zero_line).properties(height=max(110, len(edge_df) * 38))
             st.altair_chart(chart_edge_final, use_container_width=True)
 
             # ------------------------------------------------------------------
@@ -281,23 +307,24 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
             # ------------------------------------------------------------------
             st.markdown("#### 📈 Rolling Hit Rate & Game Trend (Last 5 Games)")
 
+            has_any_l5 = False
             for _, r_prop in player_props.iterrows():
                 target_prop_name = r_prop["Prop Name"]
                 cur_line = r_prop["Vegas Line"]
                 book_tag = r_prop["Book"]
                 last_5_raw = str(r_prop.get("Last 5", "")).strip()
 
-                if last_5_raw and last_5_raw != "-" and last_5_raw != "nan":
+                if last_5_raw and last_5_raw not in ["-", "nan", ""]:
                     try:
                         stats_list = [float(x.strip()) for x in last_5_raw.split(",") if x.strip()]
                     except Exception:
                         stats_list = []
 
                     if stats_list:
+                        has_any_l5 = True
                         trend_points = []
                         total_games = len(stats_list)
                         for idx, val in enumerate(stats_list):
-                            # Chronological game labels: G-5 (oldest) up to G-1 (most recent)
                             g_label = f"G-{total_games - idx}" if (total_games - idx) > 1 else "Last Game"
                             trend_points.append({
                                 "Game": g_label,
@@ -314,7 +341,7 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
                         st.markdown(f"**📌 {target_prop_name} `[{book_tag}]` — Line: `{cur_line}` | Hit Rate: `{hits}/{total} ({hit_pct}%)`**")
 
                         hit_bars = alt.Chart(t_df).mark_bar(size=26, cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
-                            x=alt.X("Game:N", title="Recent Game Log", sort=None),
+                            x=alt.X("Game:N", title="Recent Games (Oldest ➔ Latest)", sort=None),
                             y=alt.Y("Value:Q", title="Stat Value"),
                             color=alt.Color(
                                 "Result:N",
@@ -333,9 +360,8 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
                             text=alt.Text("Value:Q", format=".1f")
                         )
 
-                        trend_chart = (hit_bars + bar_text + ref_line).properties(height=230)
+                        trend_chart = (hit_bars + bar_text + ref_line).properties(height=220)
                         st.altair_chart(trend_chart, use_container_width=True)
-                    else:
-                        st.caption(f"ℹ️ {target_prop_name} `[{book_tag}]`: No recent game stats recorded.")
-                else:
-                    st.caption(f"ℹ️ {target_prop_name} `[{book_tag}]`: No recent game stats recorded.")
+
+            if not has_any_l5:
+                st.caption("ℹ️ *Last 5 game stats will appear here once you run the updated Script 3 in Colab and push the new slate file.*")

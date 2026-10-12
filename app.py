@@ -137,7 +137,6 @@ def format_american_odds(val):
     except:
         return str(val)
 
-# Unbreakable Best Line Badge (Never splits or cuts off)
 def get_best_line_badge_html(line_adv_note):
     if line_adv_note:
         return f'<span style="background-color:#FEF3C7; color:#92400E; padding:3px 9px; border-radius:12px; font-weight:bold; font-size:11px; border:1px solid #F59E0B; white-space:nowrap; display:inline-block; flex-shrink:0;">{line_adv_note}</span>'
@@ -163,7 +162,28 @@ def extract_sanitized_prop_and_line(r):
     return p_name, line_val
 
 # --------------------------------------------------------------------------
-# AUTO-DERIVE BOOK WIN PROBABILITY (HANDLES AMERICAN & DECIMAL ODDS)
+# CLEAN GAMBLY BET STRING FORMATTER (ELIMINATES STUTTER REPEATS LIKE 60 60+)
+# --------------------------------------------------------------------------
+def format_gambly_bet_string(player, side, line, prop_name):
+    p = str(player).strip()
+    prop = str(prop_name).strip()
+    side = str(side).strip() if str(side).strip() else "Over"
+    line = str(line).strip()
+
+    # Check for Alt Milestone patterns (e.g., "110+ Rush Yds (Over 109.5)" or "2+ Recs")
+    m = re.search(r"(\d+)\+\s*([A-Za-z\s\+]+)", prop)
+    if m:
+        milestone_num = m.group(1)
+        stat_type = re.sub(r"\(.*?\)", "", m.group(2)).strip()
+        # Clean Gambly Alt Syntax: Player 110+ Rush Yds (No repeat "Over 110 110+")
+        return f"{p} {milestone_num}+ {stat_type}"
+
+    # Clean Standard Props: Player Over 68.5 Rush Yds
+    clean_prop = re.sub(r"\(.*?\)", "", prop).strip()
+    return f"{p} {side} {line} {clean_prop}"
+
+# --------------------------------------------------------------------------
+# AUTO-DERIVE BOOK WIN PROBABILITY
 # --------------------------------------------------------------------------
 def get_or_calculate_book_prob(book_prob_raw, odds_raw):
     if pd.notna(book_prob_raw) and str(book_prob_raw).strip().lower() not in ["-", "nan", "none", "", "unposted"]:
@@ -287,9 +307,13 @@ def render_gambly_copy_box(df, box_title="📋 Gambly / Tracker Copy Slip"):
             line = format_clean_decimal(r["Vegas Line"])
             prop = str(r["Prop Name"]).strip()
             
-            if p and line and prop and "nan" not in f"{line} {prop}".lower():
-                slip_lines.append(f"{p} {side} {line} {prop}")
+            bet_str = format_gambly_bet_string(p, side, line, prop)
+            if bet_str and "nan" not in bet_str.lower():
+                slip_lines.append(bet_str)
                 
+        # Deduplicate cleanly
+        slip_lines = list(dict.fromkeys(slip_lines))
+        
         if slip_lines:
             st.caption(f"Showing **{len(slip_lines)}** {c_book} bets (Click icon in top-right to copy):")
             st.code("\n".join(slip_lines), language="text")
@@ -588,7 +612,7 @@ elif app_mode == "⚡ Pro Visualizer: Alt Lines":
         render_prop_visualizer(alt_df, is_alt_mode=True)
 
 # ==============================================================================
-# SCREEN 3: BEST OF THE BEST
+# SCREEN 3: BEST OF THE BEST (CLEAN GAMBLY FORMAT WITHOUT REPEATS)
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
     st.title("💎 Best of the Best (Top Conviction Plays)")
@@ -630,7 +654,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
 
         st.caption("Showing the top conviction bets on the slate clearing dual model edge and market devig.")
 
-        # Gambly Copy Box for Best of the Best
+        # CLEAN GAMBLY COPY BOX (NO REPEATS LIKE 60 60+)
         with st.expander("📋 Gambly Copy Slip (Clean Format by Sportsbook)", expanded=True):
             best_c_book = st.selectbox(
                 "Select Sportsbook for Copy Slip:",
@@ -648,9 +672,13 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 side = "Over" if pd.isna(r_best.get("Side")) or str(r_best.get("Side")).strip().lower() in ["nan", "none", ""] else str(r_best.get("Side")).strip()
                 line = format_clean_decimal(r_best["Clean_Line"])
                 prop = str(r_best["Clean_Prop"]).strip()
-                if p and line and prop and "nan" not in f"{line} {prop}".lower():
-                    b_slip_lines.append(f"{p} {side} {line} {prop}")
+                
+                bet_str = format_gambly_bet_string(p, side, line, prop)
+                if bet_str and "nan" not in bet_str.lower():
+                    b_slip_lines.append(bet_str)
                     
+            b_slip_lines = list(dict.fromkeys(b_slip_lines))
+            
             if b_slip_lines:
                 st.caption(f"Showing **{len(b_slip_lines)}** {best_c_book} bets (Click icon in top-right to copy):")
                 st.code("\n".join(b_slip_lines), language="text")

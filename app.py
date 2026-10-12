@@ -7,6 +7,26 @@ import altair as alt
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
+# --------------------------------------------------------------------------
+# GLOBAL CSS GUARD (PREVENTS METRICS FROM COLLAPSING TO ...)
+# --------------------------------------------------------------------------
+st.markdown("""
+<style>
+[data-testid="stMetricValue"] {
+    font-size: 1.30rem !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+}
+[data-testid="stMetricLabel"] {
+    font-size: 0.85rem !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 DATA_FOLDER = "./data"
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
@@ -90,8 +110,8 @@ def get_book_styled(book_name):
 
 # Percentage & Decimal Formatters
 def format_percentage(val, is_ev=False):
-    if pd.isna(val) or val == "-" or str(val).strip().lower() in ["nan", "none", ""]:
-        return "-"
+    if pd.isna(val) or val == "-" or str(val).strip().lower() in ["nan", "none", "", "unposted"]:
+        return str(val) if str(val).strip().lower() == "unposted" else "-"
     try:
         f_val = float(str(val).replace("%", "").strip())
         v = f_val if abs(f_val) <= 1.0 else f_val / 100.0
@@ -101,7 +121,7 @@ def format_percentage(val, is_ev=False):
 
 def format_clean_decimal(val):
     if pd.isna(val) or val == "-" or str(val).strip().lower() in ["nan", "none", ""]:
-        return "-"
+        return ""
     try:
         f_val = float(val)
         return f"{int(f_val)}" if f_val.is_integer() else f"{f_val:.1f}"
@@ -117,11 +137,51 @@ def format_american_odds(val):
     except:
         return str(val)
 
-# Best Line Badge Generator
 def get_best_line_badge_html(line_adv_note):
     if line_adv_note:
         return f'<span style="background-color:#FEF3C7; color:#92400E; padding:3px 8px; border-radius:12px; font-weight:bold; font-size:11px; border:1px solid #F59E0B; margin-left:6px;">{line_adv_note}</span>'
     return ""
+
+def extract_sanitized_prop_and_line(r):
+    p_val = r.get("Prop")
+    if pd.isna(p_val) or str(p_val).strip().lower() in ["nan", "none", ""]:
+        p_val = r.get("Milestone (Alt Line)")
+    if pd.isna(p_val) or str(p_val).strip().lower() in ["nan", "none", ""]:
+        return None, None
+    p_name = str(p_val).strip()
+
+    line_val = r.get("Line")
+    if pd.isna(line_val) or str(line_val).strip().lower() in ["nan", "none", ""]:
+        m_num = re.search(r"(\d+(\.\d+)?)", p_name)
+        if m_num: line_val = float(m_num.group(1))
+        else: return None, None
+    else:
+        try: line_val = float(line_val)
+        except: return None, None
+
+    return p_name, line_val
+
+# --------------------------------------------------------------------------
+# AUTO-DERIVE BOOK WIN PROBABILITY (FILLS MISSING ALT LINE PROBABILITIES)
+# --------------------------------------------------------------------------
+def get_or_calculate_book_prob(book_prob_raw, odds_raw):
+    # 1. Use existing book probability if valid
+    if pd.notna(book_prob_raw) and str(book_prob_raw).strip().lower() not in ["-", "nan", "none", ""]:
+        try:
+            v = float(str(book_prob_raw).replace("%", "").strip())
+            return v if abs(v) <= 1.0 else v / 100.0
+        except:
+            pass
+    # 2. Derive implied probability directly from American Odds
+    if pd.notna(odds_raw) and str(odds_raw).strip().lower() not in ["-", "nan", "none", ""]:
+        try:
+            o = float(str(odds_raw).replace("+", "").strip())
+            if o != 0:
+                if o > 0: return 100.0 / (o + 100.0)
+                else: return abs(o) / (abs(o) + 100.0)
+        except:
+            pass
+    return None
 
 # --------------------------------------------------------------------------
 # SIDEBAR NAVIGATION
@@ -204,7 +264,35 @@ def tag_best_line_advantages(df):
 
     return df
 
-# Common Render Function for Visualizers (With Copyable Bet Slip)
+def render_gambly_copy_box(df, box_title="📋 Gambly / Tracker Copy Slip"):
+    with st.expander(box_title, expanded=False):
+        c_book = st.selectbox(
+            "Select Sportsbook for Copy Slip:",
+            ["DraftKings", "FanDuel", "All Books (Combined)"],
+            key=f"cb_{box_title}"
+        )
+        
+        slip_df = df.copy()
+        if c_book != "All Books (Combined)":
+            slip_df = slip_df[slip_df["Book"] == c_book]
+            
+        slip_lines = []
+        for _, r in slip_df.iterrows():
+            p = str(r["Player"]).strip()
+            side = str(r["Pick"]).strip()
+            line = format_clean_decimal(r["Vegas Line"])
+            prop = str(r["Prop Name"]).strip()
+            
+            if p and line and prop and "nan" not in f"{line} {prop}".lower():
+                slip_lines.append(f"{p} {side} {line} {prop}")
+                
+        if slip_lines:
+            st.caption(f"Showing **{len(slip_lines)}** {c_book} bets (Click icon in top-right to copy):")
+            st.code("\n".join(slip_lines), language="text")
+        else:
+            st.info(f"No bets available for {c_book} under current filters.")
+
+# Common Render Function for Visualizers (Wide Spacious Layout)
 def render_prop_visualizer(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
@@ -231,63 +319,68 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
 
     prop_rows = []
     for _, r in filtered_df.iterrows():
-        p_name = r.get("Milestone (Alt Line)") if is_alt_mode else r.get("Prop")
-        
-        line = r.get("Line")
-        if pd.isna(line) or str(line).strip().lower() in ["nan", "none", ""]:
-            m_num = re.search(r"(\d+(\.\d+)?)", str(p_name))
-            line = float(m_num.group(1)) if m_num else None
-            
+        p_name, line_f = extract_sanitized_prop_and_line(r)
+        if not p_name or line_f is None:
+            continue
+
         proj = r.get("Projection")
+        if pd.isna(proj) or str(proj).strip().lower() in ["nan", "none", ""]:
+            continue
 
-        if pd.notna(p_name) and pd.notna(line) and pd.notna(proj):
-            try:
-                line_f = float(line)
-                proj_f = float(proj)
-                player_name = str(r["Player"])
-                team_name = str(r.get(team_col, ""))
-                pos_val = str(r.get(pos_col, ""))
-                book = str(r.get("Book", "DraftKings"))
-                
-                side = str(r.get("Side", "Over")).strip()
-                if not side or side.lower() in ["nan", "none"]: side = "Over"
-                
-                odds_val = r.get("Odds", "-")
-                book_prob = r.get("Book Win Prob", "-")
-                model_prob = r.get("Model Win Prob", "-")
-                ev = r.get("EV", "-")
-                act = str(r.get("Action", "-"))
-                last_5 = str(r.get("Last 5", "-"))
+        try:
+            proj_f = float(proj)
+            player_name = str(r["Player"]).strip()
+            team_name = str(r.get(team_col, "")).strip()
+            pos_val = str(r.get(pos_col, "")).strip()
+            book = str(r.get("Book", "DraftKings")).strip()
+            
+            side = str(r.get("Side", "Over")).strip()
+            if not side or side.lower() in ["nan", "none"]: side = "Over"
+            
+            odds_val = r.get("Odds", "-")
+            book_prob_raw = r.get("Book Win Prob", "-")
+            model_prob = r.get("Model Win Prob", "-")
+            ev = r.get("EV", "-")
+            act = str(r.get("Action", "-"))
+            last_5 = str(r.get("Last 5", "-"))
 
-                prob_delta_str = None
+            # Calculate Book Implied Prob from Odds if missing
+            calc_bp = get_or_calculate_book_prob(book_prob_raw, odds_val)
+            if calc_bp is not None:
+                book_prob_str = format_percentage(calc_bp)
+            else:
+                book_prob_str = "Unposted" if str(odds_val).strip() in ["-", "nan", ""] else "-"
+
+            prob_delta_str = None
+            if calc_bp is not None and str(model_prob).strip() not in ["-", "nan", ""]:
                 try:
-                    mp_f = float(model_prob) if abs(float(model_prob)) <= 1.0 else float(model_prob)/100.0
-                    bp_f = float(book_prob) if abs(float(book_prob)) <= 1.0 else float(book_prob)/100.0
-                    prob_delta_str = f"{(mp_f - bp_f):+.1%}"
+                    mp_f = float(str(model_prob).replace("%","").strip())
+                    mp_norm = mp_f if abs(mp_f) <= 1.0 else mp_f / 100.0
+                    prob_delta_str = f"{(mp_norm - calc_bp):+.1%}"
                 except:
                     pass
 
-                prop_rows.append({
-                    "Player": player_name,
-                    "Team": team_name,
-                    "Position": pos_val,
-                    "Book": book,
-                    "Prop Label": f"{p_name} [{book}]",
-                    "Prop Name": str(p_name),
-                    "Vegas Line": line_f,
-                    "Odds": format_american_odds(odds_val),
-                    "Book Win Prob": format_percentage(book_prob),
-                    "Model Projection": proj_f,
-                    "Last 5": last_5,
-                    "Pick": side,
-                    "Margin": round(proj_f - line_f, 1),
-                    "EV": format_percentage(ev, is_ev=True),
-                    "Win Prob": format_percentage(model_prob),
-                    "Prob Delta": prob_delta_str,
-                    "Action": act
-                })
-            except:
-                pass
+            prop_rows.append({
+                "Player": player_name,
+                "Team": team_name,
+                "Position": pos_val,
+                "Book": book,
+                "Prop Label": f"{p_name} [{book}]",
+                "Prop Name": str(p_name),
+                "Vegas Line": line_f,
+                "Odds": format_american_odds(odds_val),
+                "Book Win Prob": book_prob_str,
+                "Model Projection": proj_f,
+                "Last 5": last_5,
+                "Pick": side,
+                "Margin": round(proj_f - line_f, 1),
+                "EV": format_percentage(ev, is_ev=True),
+                "Win Prob": format_percentage(model_prob),
+                "Prob Delta": prob_delta_str,
+                "Action": act
+            })
+        except:
+            pass
 
     if not prop_rows:
         st.info("No props matching these filter criteria.")
@@ -305,16 +398,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         st.info("No props available under this filter.")
         return
 
-    # --------------------------------------------------------------------------
-    # 1-CLICK COPYABLE BET SLIP (FOR GAMBLY / BET TRACKERS)
-    # --------------------------------------------------------------------------
-    with st.expander("📋 1-Click Copy Bet Slip (For Gambly / Bet Trackers)", expanded=False):
-        slip_lines = []
-        for _, row_bet in props_df.iterrows():
-            odds_str = f" ({row_bet['Odds']})" if row_bet['Odds'] != "-" else ""
-            slip_lines.append(f"{row_bet['Player']} {row_bet['Pick']} {format_clean_decimal(row_bet['Vegas Line'])} {row_bet['Prop Name']}{odds_str} [{row_bet['Book']}]")
-        st.caption("Click the copy icon in the top-right corner of the code block below to copy your picks:")
-        st.code("\n".join(slip_lines), language="text")
+    render_gambly_copy_box(props_df, box_title="📋 Gambly Copy Slip (Clean Format by Sportsbook)")
 
     unique_players = sorted(props_df["Player"].unique())
 
@@ -334,7 +418,8 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 st.markdown(f"## {player} — {team_tag} **{player_depth_label}**")
                 st.caption(f"Props Available: {len(p_props)}")
 
-            cols_per_row = 3
+            # 2 Spacious Cards per Row
+            cols_per_row = 2
             for i in range(0, len(p_props), cols_per_row):
                 batch = p_props.iloc[i:i + cols_per_row]
                 cols = st.columns(len(batch))
@@ -346,17 +431,19 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                             st.markdown(f"#### 📌 {r['Prop Name']} [{b_html}] {star_badge}", unsafe_allow_html=True)
                             st.markdown(f"**Pick:** `{r['Pick']}` | **Action:** `{r['Action']}`")
                             
+                            # Row 1
                             m1, m2, m3 = st.columns(3)
                             odds_display = f" ({r['Odds']})" if r['Odds'] != "-" else ""
                             m1.metric("Line & Odds", f"{format_clean_decimal(r['Vegas Line'])}{odds_display}")
                             m2.metric("Model Proj", format_clean_decimal(r['Model Projection']), delta=f"{r['Margin']:+0.1f}")
                             m3.metric("EV Edge", r['EV'])
                             
+                            # Row 2 (With Guaranteed Book Win Prob)
                             m4, m5 = st.columns(2)
                             m4.metric("Book Win Prob", r['Book Win Prob'])
                             m5.metric("Model Win Prob", r['Win Prob'], delta=r['Prob Delta'])
 
-            # Visual 1: Horizontal Edge Chart (With Star on Best Book)
+            # Visual 1: Horizontal Edge Chart (labelLimit=0 disables all '...' truncation)
             st.markdown("#### ⚡ Model Edge / Margin vs. Vegas Line")
             
             edge_df = p_props.groupby("Prop Label", as_index=False).first().copy()
@@ -369,7 +456,13 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             bars_edge = alt.Chart(edge_df).mark_bar(
                 size=16, cornerRadiusTopRight=4, cornerRadiusBottomRight=4, cornerRadiusTopLeft=4, cornerRadiusBottomLeft=4
             ).encode(
-                y=alt.Y("Chart_Label:N", title=None, sort="-x", scale=alt.Scale(paddingInner=0.55, paddingOuter=0.35), axis=alt.Axis(offset=15, labelPadding=12, labelLimit=240)),
+                y=alt.Y(
+                    "Chart_Label:N", 
+                    title=None, 
+                    sort="-x", 
+                    scale=alt.Scale(paddingInner=0.55, paddingOuter=0.35), 
+                    axis=alt.Axis(offset=15, labelPadding=12, labelLimit=0)
+                ),
                 x=alt.X("Margin:Q", title="Model Advantage (Margin vs. Line)", scale=alt.Scale(domain=x_domain)),
                 color=alt.Color("Edge Color:N", scale=alt.Scale(domain=["Over Edge", "Under Edge"], range=["#10B981", "#EF4444"]), legend=alt.Legend(title=None, orient="top"))
             )
@@ -415,7 +508,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                         y_max = max(max(t_df["Value"]), cur_line) * 1.30
 
                         hit_bars = alt.Chart(t_df).mark_bar(size=26, cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
-                            x=alt.X("Game:N", title="Recent Games", sort=None),
+                            x=alt.X("Game:N", title="Recent Games", sort=None, axis=alt.Axis(labelLimit=0)),
                             y=alt.Y("Value:Q", title="Stat Value", scale=alt.Scale(domain=[0, y_max])),
                             color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#10B981", "#EF4444"]), legend=alt.Legend(title=None, orient="top"))
                         )
@@ -451,7 +544,7 @@ elif app_mode == "⚡ Pro Visualizer: Alt Lines":
         render_prop_visualizer(alt_df, is_alt_mode=True)
 
 # ==============================================================================
-# SCREEN 3: BEST OF THE BEST (WITH 1-CLICK COPYABLE BET SLIP)
+# SCREEN 3: BEST OF THE BEST
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
     st.title("💎 Best of the Best (Top Conviction Plays)")
@@ -460,57 +553,83 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
     if all_curated.empty:
         st.warning("No plays available.")
     else:
-        def parse_ev_num(v):
-            try: return float(str(v).replace("%", "").strip())
-            except: return -1.0
+        sanitized_plays = []
+        for _, r_cand in all_curated.iterrows():
+            p_n, line_f = extract_sanitized_prop_and_line(r_cand)
+            if not p_n or line_f is None:
+                continue
             
-        all_curated["_ev_val"] = all_curated["EV"].apply(parse_ev_num)
-        best_plays = all_curated[
-            all_curated["Action"].astype(str).str.contains("MAX|DUAL|ANCHOR|STRONG", case=False, na=False) |
-            (all_curated["_ev_val"] >= 0.06)
-        ].sort_values(by="_ev_val", ascending=False).drop_duplicates(subset=["Player", "Line", "Book"]).head(15)
+            proj = r_cand.get("Projection")
+            if pd.isna(proj) or str(proj).strip().lower() in ["nan", "none", ""]:
+                continue
+                
+            try:
+                ev_str = str(r_cand.get("EV", "-")).replace("%", "").strip()
+                ev_f = float(ev_str)
+                r_cand_copy = r_cand.copy()
+                r_cand_copy["Clean_Prop"] = p_n
+                r_cand_copy["Clean_Line"] = line_f
+                r_cand_copy["_ev_val"] = ev_f
+                sanitized_plays.append(r_cand_copy)
+            except:
+                pass
+
+        if not sanitized_plays:
+            st.warning("No valid plays found.")
+            st.stop()
+
+        clean_curated_df = pd.DataFrame(sanitized_plays)
+        best_plays = clean_curated_df[
+            clean_curated_df["Action"].astype(str).str.contains("MAX|DUAL|ANCHOR|STRONG", case=False, na=False) |
+            (clean_curated_df["_ev_val"] >= 0.06)
+        ].sort_values(by="_ev_val", ascending=False).drop_duplicates(subset=["Player", "Clean_Prop", "Clean_Line", "Book"]).head(15)
 
         st.caption("Showing the top conviction bets on the slate clearing dual model edge and market devig.")
 
-        # 1-CLICK COPYABLE BET SLIP FOR BEST OF THE BEST
-        with st.expander("📋 1-Click Copy Bet Slip (For Gambly / Bet Trackers)", expanded=True):
-            best_slip_lines = []
-            for _, r_best in best_plays.iterrows():
-                p_n = r_best.get("Prop") or r_best.get("Milestone (Alt Line)")
-                side_c = "Over" if pd.isna(r_best.get("Side")) or str(r_best.get("Side")).strip().lower() in ["nan", "none", ""] else str(r_best.get("Side")).strip()
+        # Gambly Copy Box for Best of the Best
+        with st.expander("📋 Gambly Copy Slip (Clean Format by Sportsbook)", expanded=True):
+            best_c_book = st.selectbox(
+                "Select Sportsbook for Copy Slip:",
+                ["DraftKings", "FanDuel", "All Books (Combined)"],
+                key="best_copy_book_select"
+            )
+            
+            b_slip_df = best_plays.copy()
+            if best_c_book != "All Books (Combined)":
+                b_slip_df = b_slip_df[b_slip_df["Book"] == best_c_book]
                 
-                line_v = r_best.get("Line")
-                if pd.isna(line_v) or str(line_v).strip().lower() in ["nan", "none", ""]:
-                    m_num = re.search(r"(\d+(\.\d+)?)", str(p_n))
-                    line_c = m_num.group(1) if m_num else str(p_n)
-                else:
-                    line_c = format_clean_decimal(line_v)
+            b_slip_lines = []
+            for _, r_best in b_slip_df.iterrows():
+                p = str(r_best["Player"]).strip()
+                side = "Over" if pd.isna(r_best.get("Side")) or str(r_best.get("Side")).strip().lower() in ["nan", "none", ""] else str(r_best.get("Side")).strip()
+                line = format_clean_decimal(r_best["Clean_Line"])
+                prop = str(r_best["Clean_Prop"]).strip()
+                if p and line and prop and "nan" not in f"{line} {prop}".lower():
+                    b_slip_lines.append(f"{p} {side} {line} {prop}")
                     
-                odds_c = format_american_odds(r_best.get("Odds", "-"))
-                odds_str = f" ({odds_c})" if odds_c != "-" else ""
-                best_slip_lines.append(f"{r_best['Player']} {side_c} {line_c} {p_n}{odds_str} [{r_best['Book']}]")
-            st.caption("Click the copy icon in the top-right corner to copy all top bets to clipboard:")
-            st.code("\n".join(best_slip_lines), language="text")
+            if b_slip_lines:
+                st.caption(f"Showing **{len(b_slip_lines)}** {best_c_book} bets (Click icon in top-right to copy):")
+                st.code("\n".join(b_slip_lines), language="text")
+            else:
+                st.info(f"No bets found for {best_c_book}.")
 
         for rank, (_, row) in enumerate(best_plays.iterrows(), 1):
             p_name = row["Player"]
-            prop_n = row.get("Prop") or row.get("Milestone (Alt Line)")
+            prop_n = row["Clean_Prop"]
+            line_display = format_clean_decimal(row["Clean_Line"])
             book_s = get_book_styled(row["Book"])
             headshot_url = get_headshot_url(p_name)
 
             side_raw = str(row.get("Side", "")).strip()
             side_clean = "Over" if not side_raw or side_raw.lower() in ["nan", "none"] else side_raw
 
-            line_raw = row.get("Line")
-            if pd.isna(line_raw) or str(line_raw).lower() in ["nan", "none", ""]:
-                m_num = re.search(r"(\d+(\.\d+)?)", str(prop_n))
-                line_display = m_num.group(1) if m_num else str(prop_n)
-            else:
-                line_display = format_clean_decimal(line_raw)
-
             odds_clean = format_american_odds(row.get("Odds", "-"))
             odds_str = f" ({odds_clean})" if odds_clean != "-" else ""
-            book_prob = format_percentage(row.get("Book Win Prob"))
+
+            # Ensure Book Win Prob is populated (derives from odds if missing)
+            calc_bp_best = get_or_calculate_book_prob(row.get("Book Win Prob"), row.get("Odds"))
+            book_prob = format_percentage(calc_bp_best) if calc_bp_best is not None else ("Unposted" if odds_clean == "-" else "-")
+            
             model_prob = format_percentage(row.get("Model Win Prob"))
             ev_clean = format_percentage(row.get("EV"), is_ev=True)
 

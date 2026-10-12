@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import altair as alt
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
@@ -29,6 +30,39 @@ def format_percentage(val, is_ev=False):
         return val
     v = val if abs(val) <= 1.0 else val / 100.0
     return f"{v:+.1%}" if is_ev else f"{v:.1%}"
+
+# Helper to draw slim, modern side-by-side charts
+def render_sleek_player_chart(player_props):
+    plot_rows = []
+    for _, r in player_props.iterrows():
+        p_label = f"{r['Prop Name']} [{r['Book']}]"
+        plot_rows.append({"Prop": p_label, "Type": "Vegas Line", "Value": r["Vegas Line"]})
+        plot_rows.append({"Prop": p_label, "Type": "Model Projection", "Value": r["Model Projection"]})
+
+    chart_data = pd.DataFrame(plot_rows)
+
+    # Slim grouped bars with rounded tops
+    bars = alt.Chart(chart_data).mark_bar(size=26, cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+        x=alt.X("Type:N", title=None, axis=alt.Axis(labels=True, ticks=False)),
+        y=alt.Y("Value:Q", title="Stat Value", scale=alt.Scale(zero=True)),
+        color=alt.Color(
+            "Type:N",
+            scale=alt.Scale(domain=["Vegas Line", "Model Projection"], range=["#64748B", "#10B981"]),
+            legend=alt.Legend(title=None, orient="top")
+        ),
+        column=alt.Column("Prop:N", title=None, header=alt.Header(labelFontSize=12, labelFontWeight="bold"))
+    )
+
+    # Print the exact number right above each bar
+    text = alt.Chart(chart_data).mark_text(dy=-10, fontSize=11, fontWeight="bold").encode(
+        x=alt.X("Type:N"),
+        y=alt.Y("Value:Q"),
+        text=alt.Text("Value:Q", format=".1f"),
+        column=alt.Column("Prop:N")
+    )
+
+    full_chart = (bars + text).properties(height=260)
+    st.altair_chart(full_chart, use_container_width=False)
 
 # ==============================================================================
 # SCREEN 1: MASTER EV TABLES
@@ -82,12 +116,11 @@ if app_mode == "📋 Master EV Tables":
             st.dataframe(df.style.apply(highlight_actions, axis=1), use_container_width=True, height=550)
 
 # ==============================================================================
-# SCREEN 2: TEAM & POSITION VISUALIZER (STACKED CHARTS)
+# SCREEN 2: TEAM & POSITION VISUALIZER (SLIM MODERN BARS)
 # ==============================================================================
 elif app_mode == "📊 Team & Player Prop Visualizer":
     st.title("📊 Team & Position Prop Analytics")
 
-    # Gather all player records across every sheet
     all_player_rows = []
     for sheet in excel_data.sheet_names:
         if sheet == "How To Use":
@@ -97,6 +130,14 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
         if p_col and not sub_df.empty:
             sub_df["Source Sheet"] = sheet
             sub_df["Player"] = sub_df[p_col]
+            
+            if "Book" not in sub_df.columns:
+                if "DK" in sheet: sub_df["Book"] = "DraftKings"
+                elif "FD" in sheet: sub_df["Book"] = "FanDuel"
+                else: sub_df["Book"] = sheet
+            else:
+                sub_df["Book"] = sub_df["Book"].fillna(sheet)
+                
             all_player_rows.append(sub_df)
 
     if not all_player_rows:
@@ -105,27 +146,25 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
 
     combined_df = pd.concat(all_player_rows, ignore_index=True)
 
-    # Clean Team & Position columns
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
 
-    # 1. TEAM & POSITION FILTERS
-    f_col1, f_col2, f_col3 = st.columns([1, 1, 1])
+    f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
 
     with f_col1:
-        if team_col:
-            team_list = ["All Teams"] + sorted(combined_df[team_col].dropna().astype(str).unique().tolist())
-            selected_team = st.selectbox("🏈 Select Team:", team_list)
-        else:
-            selected_team = "All Teams"
+        team_list = ["All Teams"] + sorted(combined_df[team_col].dropna().astype(str).unique().tolist()) if team_col else ["All Teams"]
+        selected_team = st.selectbox("🏈 Team:", team_list)
 
     with f_col2:
-        selected_pos = st.selectbox("🎯 Select Position:", ["All Positions", "QB", "RB", "WR", "TE"])
+        selected_pos = st.selectbox("🎯 Position:", ["All Positions", "QB", "RB", "WR", "TE"])
 
     with f_col3:
+        all_books = ["All Sportsbooks"] + sorted(combined_df["Book"].dropna().astype(str).unique().tolist())
+        selected_book = st.selectbox("🎰 Sportsbook:", all_books)
+
+    with f_col4:
         market_type = st.selectbox("📊 Prop Type:", ["All Props", "Yards Only", "Counts/Volume Only"])
 
-    # Filter data by Team and Position
     filtered_df = combined_df.copy()
     if team_col and selected_team != "All Teams":
         filtered_df = filtered_df[filtered_df[team_col].astype(str) == selected_team]
@@ -133,7 +172,9 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
     if pos_col and selected_pos != "All Positions":
         filtered_df = filtered_df[filtered_df[pos_col].astype(str).str.contains(selected_pos, case=False, na=False)]
 
-    # Extract all betting lines
+    if selected_book != "All Sportsbooks":
+        filtered_df = filtered_df[filtered_df["Book"].astype(str) == selected_book]
+
     prop_rows = []
     for _, r in filtered_df.iterrows():
         p_name = r.get("Prop") or r.get("Milestone (Alt Line)")
@@ -146,7 +187,7 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
                 proj_f = float(proj)
                 player_name = str(r["Player"])
                 team_name = str(r.get(team_col, ""))
-                book = str(r.get("Book", r.get("Source Sheet", "")))
+                book = str(r.get("Book", ""))
                 side = str(r.get("Side", "Over"))
                 ev = r.get("EV", "-")
                 prob = r.get("Model Win Prob", "-")
@@ -155,7 +196,8 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
                 prop_rows.append({
                     "Player": player_name,
                     "Team": team_name,
-                    "Prop Label": f"{player_name} — {p_name} ({book})",
+                    "Book": book,
+                    "Prop Label": f"{p_name} [{book}]",
                     "Prop Name": str(p_name),
                     "Vegas Line": line_f,
                     "Model Projection": proj_f,
@@ -169,12 +211,11 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
                 pass
 
     if not prop_rows:
-        st.info("No betting props found matching this Team & Position filter.")
+        st.info("No betting props found matching these filters.")
         st.stop()
 
-    props_df = pd.DataFrame(prop_rows).drop_duplicates(subset=["Prop Label"])
+    props_df = pd.DataFrame(prop_rows).drop_duplicates(subset=["Player", "Prop Label", "Vegas Line"])
 
-    # Filter Market Type
     if market_type == "Yards Only":
         props_df = props_df[props_df["Prop Name"].str.contains("Yds|Yards", case=False, na=False)]
     elif market_type == "Counts/Volume Only":
@@ -184,20 +225,6 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
         st.info("No props matching the selected Prop Type.")
         st.stop()
 
-    # --------------------------------------------------------------------------
-    # 2. ALL-PLAYER MACRO COMPARISON CHART
-    # --------------------------------------------------------------------------
-    st.markdown(f"### 📈 All Players Comparison: {selected_team} ({selected_pos})")
-    st.caption("Grey = Vegas Line | Green = Model Projection")
-
-    macro_chart_df = props_df.set_index("Prop Label")[["Vegas Line", "Model Projection"]]
-    st.bar_chart(macro_chart_df, stack=False, color=["#4A5568", "#28A745"], height=400)
-
-    st.divider()
-
-    # --------------------------------------------------------------------------
-    # 3. STACKED INDIVIDUAL PLAYER BREAKDOWNS (DOWN THE PAGE)
-    # --------------------------------------------------------------------------
     st.markdown("### 🏆 Stacked Player Breakdowns")
 
     unique_players = sorted(props_df["Player"].unique())
@@ -209,7 +236,7 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
         with st.container(border=True):
             st.markdown(f"## 👤 {player} ({team_tag})")
 
-            # Scorecards in rows of 3
+            # 1. SCORECARDS TOGETHER
             cols_per_row = 3
             for i in range(0, len(player_props), cols_per_row):
                 batch = player_props.iloc[i:i + cols_per_row]
@@ -217,7 +244,7 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
                 for c_idx, (_, r) in enumerate(batch.iterrows()):
                     with cols[c_idx]:
                         with st.container(border=True):
-                            st.markdown(f"**📌 {r['Prop Name']}**")
+                            st.markdown(f"#### 📌 {r['Prop Name']} `[{r['Book']}]`")
                             st.markdown(f"**Pick:** `{r['Pick']}` | **Action:** `{r['Action']}`")
                             
                             m1, m2 = st.columns(2)
@@ -228,7 +255,6 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
                             m3.metric("Win Prob", r['Win Prob'])
                             m4.metric("EV Edge", r['EV'])
 
-            # Side-by-side bar chart for this individual player
-            st.markdown(f"**{player} — Vegas Line vs. Model Projection:**")
-            p_chart = player_props.set_index("Prop Label")[["Vegas Line", "Model Projection"]]
-            st.bar_chart(p_chart, stack=False, color=["#4A5568", "#28A745"], height=250)
+            # 2. SLIM, MODERN SIDE-BY-SIDE BARS
+            st.markdown(f"**Side-by-Side Comparison:** *(Slate = Vegas Line | Green = Model Projection)*")
+            render_sleek_player_chart(player_props)

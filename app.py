@@ -90,16 +90,32 @@ def get_book_styled(book_name):
 
 # Percentage & Decimal Formatters
 def format_percentage(val, is_ev=False):
-    if pd.isna(val) or val == "-" or not isinstance(val, (int, float)):
-        return val
-    v = val if abs(val) <= 1.0 else val / 100.0
-    return f"{v:+.1%}" if is_ev else f"{v:.1%}"
+    if pd.isna(val) or val == "-" or str(val).strip().lower() in ["nan", "none", ""]:
+        return "-"
+    try:
+        f_val = float(str(val).replace("%", "").strip())
+        v = f_val if abs(f_val) <= 1.0 else f_val / 100.0
+        return f"{v:+.1%}" if is_ev else f"{v:.1%}"
+    except:
+        return str(val)
 
 def format_clean_decimal(val):
-    if pd.isna(val) or val == "-" or not isinstance(val, (int, float)):
-        return val
-    f_val = float(val)
-    return f"{int(f_val)}" if f_val.is_integer() else f"{f_val:.1f}"
+    if pd.isna(val) or val == "-" or str(val).strip().lower() in ["nan", "none", ""]:
+        return "-"
+    try:
+        f_val = float(val)
+        return f"{int(f_val)}" if f_val.is_integer() else f"{f_val:.1f}"
+    except:
+        return str(val)
+
+def format_american_odds(val):
+    if pd.isna(val) or val == "-" or str(val).strip().lower() in ["nan", "none", ""]:
+        return "-"
+    try:
+        f_val = int(float(val))
+        return f"+{f_val}" if f_val > 0 else f"{f_val}"
+    except:
+        return str(val)
 
 # Best Line Badge Generator
 def get_best_line_badge_html(line_adv_note):
@@ -157,14 +173,12 @@ def tag_best_line_advantages(df):
     df["Is_Best_Line"] = False
     df["Line_Adv_Note"] = ""
 
-    # Parse numeric EV
     def parse_ev_float(v):
-        try: return float(v)
+        try: return float(str(v).replace("%", "").strip())
         except: return -1.0
     
     df["_ev_num"] = df["EV"].apply(parse_ev_float)
 
-    # Compare books per Player and Prop
     for (p_name, prop_n), grp in df.groupby(["Player", "Prop Name"]):
         if len(grp) > 1:
             side = grp["Pick"].iloc[0]
@@ -190,7 +204,7 @@ def tag_best_line_advantages(df):
 
     return df
 
-# Common Render Function for Visualizers
+# Common Render Function for Visualizers (Includes Odds & Book Win Prob)
 def render_prop_visualizer(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
@@ -218,7 +232,13 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
     prop_rows = []
     for _, r in filtered_df.iterrows():
         p_name = r.get("Milestone (Alt Line)") if is_alt_mode else r.get("Prop")
-        line = r.get("Line") or (float(re.search(r"\d+(\.\d+)?", str(p_name)).group()) if re.search(r"\d+(\.\d+)?", str(p_name)) else None)
+        
+        # Robust Line Extraction (handles Alt Lines without NaN)
+        line = r.get("Line")
+        if pd.isna(line) or str(line).strip().lower() in ["nan", "none", ""]:
+            m_num = re.search(r"(\d+(\.\d+)?)", str(p_name))
+            line = float(m_num.group(1)) if m_num else None
+            
         proj = r.get("Projection")
 
         if pd.notna(p_name) and pd.notna(line) and pd.notna(proj):
@@ -229,11 +249,26 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 team_name = str(r.get(team_col, ""))
                 pos_val = str(r.get(pos_col, ""))
                 book = str(r.get("Book", "DraftKings"))
-                side = str(r.get("Side", "Over"))
+                
+                # Robust Side (Never NaN)
+                side = str(r.get("Side", "Over")).strip()
+                if not side or side.lower() in ["nan", "none"]: side = "Over"
+                
+                odds_val = r.get("Odds", "-")
+                book_prob = r.get("Book Win Prob", "-")
+                model_prob = r.get("Model Win Prob", "-")
                 ev = r.get("EV", "-")
-                prob = r.get("Model Win Prob", "-")
                 act = str(r.get("Action", "-"))
                 last_5 = str(r.get("Last 5", "-"))
+
+                # Delta between Model Prob and Book Prob
+                prob_delta_str = None
+                try:
+                    mp_f = float(model_prob) if abs(float(model_prob)) <= 1.0 else float(model_prob)/100.0
+                    bp_f = float(book_prob) if abs(float(book_prob)) <= 1.0 else float(book_prob)/100.0
+                    prob_delta_str = f"{(mp_f - bp_f):+.1%}"
+                except:
+                    pass
 
                 prop_rows.append({
                     "Player": player_name,
@@ -243,12 +278,15 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                     "Prop Label": f"{p_name} [{book}]",
                     "Prop Name": str(p_name),
                     "Vegas Line": line_f,
+                    "Odds": format_american_odds(odds_val),
+                    "Book Win Prob": format_percentage(book_prob),
                     "Model Projection": proj_f,
                     "Last 5": last_5,
                     "Pick": side,
                     "Margin": round(proj_f - line_f, 1),
                     "EV": format_percentage(ev, is_ev=True),
-                    "Win Prob": format_percentage(prob),
+                    "Win Prob": format_percentage(model_prob),
+                    "Prob Delta": prob_delta_str,
                     "Action": act
                 })
             except:
@@ -259,8 +297,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         return
 
     raw_props_df = pd.DataFrame(prop_rows).drop_duplicates(subset=["Player", "Prop Label", "Vegas Line"])
-
-    # Calculate Line Advantage
     props_df = tag_best_line_advantages(raw_props_df)
 
     if selected_prop_filter == "Yards Only":
@@ -291,7 +327,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 st.markdown(f"## {player} — {team_tag} **{player_depth_label}**")
                 st.caption(f"Props Available: {len(p_props)}")
 
-            # Scorecards with ⭐ Best Line Advantage Badging
+            # Scorecards with Odds, Book Win Prob, and Model Win Prob
             cols_per_row = 3
             for i in range(0, len(p_props), cols_per_row):
                 batch = p_props.iloc[i:i + cols_per_row]
@@ -303,12 +339,18 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                             star_badge = get_best_line_badge_html(r['Line_Adv_Note'])
                             st.markdown(f"#### 📌 {r['Prop Name']} [{b_html}] {star_badge}", unsafe_allow_html=True)
                             st.markdown(f"**Pick:** `{r['Pick']}` | **Action:** `{r['Action']}`")
-                            m1, m2 = st.columns(2)
-                            m1.metric("Vegas Line", format_clean_decimal(r['Vegas Line']))
+                            
+                            # Row 1: Line & Odds, Model Proj, EV Edge
+                            m1, m2, m3 = st.columns(3)
+                            odds_display = f" ({r['Odds']})" if r['Odds'] != "-" else ""
+                            m1.metric("Line & Odds", f"{format_clean_decimal(r['Vegas Line'])}{odds_display}")
                             m2.metric("Model Proj", format_clean_decimal(r['Model Projection']), delta=f"{r['Margin']:+0.1f}")
-                            m3, m4 = st.columns(2)
-                            m3.metric("Win Prob", r['Win Prob'])
-                            m4.metric("EV Edge", r['EV'])
+                            m3.metric("EV Edge", r['EV'])
+                            
+                            # Row 2: Book Win Prob vs Model Win Prob
+                            m4, m5 = st.columns(2)
+                            m4.metric("Book Win Prob", r['Book Win Prob'])
+                            m5.metric("Model Win Prob", r['Win Prob'], delta=r['Prob Delta'])
 
             # Visual 1: Horizontal Edge Chart (With Star on Best Book)
             st.markdown("#### ⚡ Model Edge / Margin vs. Vegas Line")
@@ -405,7 +447,7 @@ elif app_mode == "⚡ Pro Visualizer: Alt Lines":
         render_prop_visualizer(alt_df, is_alt_mode=True)
 
 # ==============================================================================
-# SCREEN 3: BEST OF THE BEST (TOP EDGES ON THE SLATE)
+# SCREEN 3: BEST OF THE BEST (FIXED NAN NAN + ADDED ODDS & PROBABILITIES)
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
     st.title("💎 Best of the Best (Top Conviction Plays)")
@@ -415,14 +457,14 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
         st.warning("No plays available.")
     else:
         def parse_ev_num(v):
-            try: return float(v)
+            try: return float(str(v).replace("%", "").strip())
             except: return -1.0
             
         all_curated["_ev_val"] = all_curated["EV"].apply(parse_ev_num)
         best_plays = all_curated[
             all_curated["Action"].astype(str).str.contains("MAX|DUAL|ANCHOR|STRONG", case=False, na=False) |
             (all_curated["_ev_val"] >= 0.06)
-        ].sort_values(by="_ev_val", ascending=False).drop_duplicates(subset=["Player", "Line", "Book"]).head(12)
+        ].sort_values(by="_ev_val", ascending=False).drop_duplicates(subset=["Player", "Line", "Book"]).head(15)
 
         st.caption("Showing the top conviction bets on the slate clearing dual model edge and market devig.")
 
@@ -431,6 +473,24 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
             prop_n = row.get("Prop") or row.get("Milestone (Alt Line)")
             book_s = get_book_styled(row["Book"])
             headshot_url = get_headshot_url(p_name)
+
+            # Robust Side (Never NaN)
+            side_raw = str(row.get("Side", "")).strip()
+            side_clean = "Over" if not side_raw or side_raw.lower() in ["nan", "none"] else side_raw
+
+            # Robust Line (Never NaN)
+            line_raw = row.get("Line")
+            if pd.isna(line_raw) or str(line_raw).lower() in ["nan", "none", ""]:
+                m_num = re.search(r"(\d+(\.\d+)?)", str(prop_n))
+                line_display = m_num.group(1) if m_num else str(prop_n)
+            else:
+                line_display = format_clean_decimal(line_raw)
+
+            odds_clean = format_american_odds(row.get("Odds", "-"))
+            odds_str = f" ({odds_clean})" if odds_clean != "-" else ""
+            book_prob = format_percentage(row.get("Book Win Prob"))
+            model_prob = format_percentage(row.get("Model Win Prob"))
+            ev_clean = format_percentage(row.get("EV"), is_ev=True)
 
             with st.container(border=True):
                 c1, c2, c3, c4, c5 = st.columns([1, 3, 2, 2, 2])
@@ -441,12 +501,14 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                     st.markdown(f"### #{rank} {p_name}")
                     st.markdown(f"**📌 {prop_n}** [{book_s}]", unsafe_allow_html=True)
                 with c3:
-                    st.metric("Line / Pick", f"{row.get('Side', 'Over')} {format_clean_decimal(row.get('Line'))}")
+                    st.metric("Line & Odds", f"{side_clean} {line_display}{odds_str}")
+                    st.caption(f"Book Win Prob: **{book_prob}**")
                 with c4:
                     st.metric("Model Proj", format_clean_decimal(row.get('Projection')))
+                    st.caption(f"Model Win Prob: **{model_prob}**")
                 with c5:
-                    st.metric("EV Edge", format_percentage(row.get('EV'), is_ev=True))
-                st.caption(f"⭐ **Recommendation:** `{row.get('Action')}` | Win Prob: {format_percentage(row.get('Model Win Prob'))}")
+                    st.metric("EV Edge", ev_clean)
+                    st.caption(f"Action: `{row.get('Action', 'STRONG BET')}`")
 
 # ==============================================================================
 # SCREEN 4: MASTER EV TABLES (WITH FULL TOP-LINE FILTERING)
@@ -503,6 +565,8 @@ elif app_mode == "📋 Master EV Tables":
                     df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=False))
                 elif any(w in col for w in ["Line", "Projection", "Calibrated Proj"]):
                     df[col] = df[col].apply(format_clean_decimal)
+                elif col == "Odds":
+                    df[col] = df[col].apply(format_american_odds)
 
             df = df.drop(columns=[c for c in ["GameSortKey", "SortScore", "CleanName"] if c in df.columns])
 

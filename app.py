@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import os
-import plotly.graph_objects as go
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
@@ -21,10 +20,8 @@ st.sidebar.title("🏈 NFL Quant Engine")
 selected_file = st.sidebar.selectbox("📅 Select Slate:", files)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
-# Screen Switcher
 app_mode = st.sidebar.radio("📱 Screen:", ["📋 Master EV Tables", "📊 Player Prop Deep Dive"])
 
-# Load all data
 excel_data = pd.ExcelFile(file_path)
 
 def format_percentage(val, is_ev=False):
@@ -85,81 +82,83 @@ if app_mode == "📋 Master EV Tables":
             st.dataframe(df.style.apply(highlight_actions, axis=1), use_container_width=True, height=550)
 
 # ==============================================================================
-# SCREEN 2: PLAYER PROP DEEP DIVE & CHARTS
+# SCREEN 2: DYNAMIC PLAYER PROP DEEP DIVE & CHARTS
 # ==============================================================================
 elif app_mode == "📊 Player Prop Deep Dive":
     st.title("📊 Player Prop Analytics & Visuals")
 
-    # Combine all prop sheets into one search pool
-    all_props = []
-    for sheet in ["Top DK OU", "Top FD OU", "Top DK Alt Lines", "Top FD Alt Lines"]:
-        if sheet in excel_data.sheet_names:
-            sub_df = pd.read_excel(excel_data, sheet_name=sheet)
-            if not sub_df.empty:
-                sub_df["Source"] = sheet
-                all_props.append(sub_df)
+    # Dynamically find ALL sheets that have a 'Player' column
+    player_dfs = []
+    for sheet in excel_data.sheet_names:
+        if sheet == "How To Use":
+            continue
+        sub_df = pd.read_excel(excel_data, sheet_name=sheet)
+        # Check if Player column exists
+        p_col = next((c for c in sub_df.columns if c.strip().lower() == "player"), None)
+        if p_col and not sub_df.empty:
+            sub_df["Source Sheet"] = sheet
+            sub_df["Player"] = sub_df[p_col]  # Standardize name
+            player_dfs.append(sub_df)
 
-    if not all_props:
-        st.warning("No prop bet data found in this workbook.")
+    if not player_dfs:
+        st.warning(f"Could not find any sheets containing player data in: {selected_file}")
+        st.info(f"Available sheets found: {excel_data.sheet_names}")
         st.stop()
 
-    combined_df = pd.concat(all_props, ignore_index=True)
-    player_list = sorted(combined_df["Player"].dropna().unique())
+    # Collect all unique player names across every sheet
+    all_players = set()
+    for df in player_dfs:
+        all_players.update(df["Player"].dropna().unique())
+    player_list = sorted(list(all_players))
 
     selected_player = st.selectbox("👤 Select Player:", player_list)
-    player_data = combined_df[combined_df["Player"] == selected_player]
 
-    if player_data.empty:
-        st.info("No props available for this player.")
-        st.stop()
+    st.subheader(f"Data & Projections for: {selected_player}")
 
-    st.subheader(f"Props Breakdown for {selected_player}")
+    found_any = False
+    for df in player_dfs:
+        p_matches = df[df["Player"] == selected_player]
+        if p_matches.empty:
+            continue
 
-    # Display KPI metrics for each prop available for this player
-    for idx, row in player_data.iterrows():
-        prop_name = row.get("Prop") or row.get("Milestone (Alt Line)") or "Prop"
-        line_val = row.get("Line", "-")
-        proj_val = row.get("Projection", "-")
-        ev_val = row.get("EV", "-")
-        win_prob = row.get("Model Win Prob", "-")
-        side = row.get("Side", "Over")
-        book = row.get("Book", "")
+        sheet_src = p_matches["Source Sheet"].iloc[0]
 
-        with st.expander(f"📌 {prop_name} ({book}) — Line: {line_val} | Pick: {side}", expanded=True):
-            kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-            kpi1.metric("Vegas Line", f"{line_val}")
-            kpi2.metric("Model Projection", f"{proj_val}")
-            kpi3.metric("Model Win Prob", format_percentage(win_prob))
-            kpi4.metric("EV Edge", format_percentage(ev_val, is_ev=True))
+        for _, row in p_matches.iterrows():
+            found_any = True
+            prop_name = row.get("Prop") or row.get("Milestone (Alt Line)")
 
-            # Visual Comparison Bar Chart
-            if isinstance(line_val, (int, float)) and isinstance(proj_val, (int, float)):
-                diff = round(proj_val - line_val, 1)
-                bar_color = "#28a745" if diff >= 0 else "#dc3545"
+            # CASE A: It is a Betting Line (has Line and Projection)
+            if pd.notna(row.get("Line")) and pd.notna(row.get("Projection")):
+                line_val = float(row["Line"])
+                proj_val = float(row["Projection"])
+                side = row.get("Side", "Over")
+                book = row.get("Book", sheet_src)
+                ev_val = row.get("EV", "-")
+                win_prob = row.get("Model Win Prob", "-")
 
-                fig = go.Figure()
-                fig.add_trace(go.Bar(
-                    name="Vegas Line",
-                    x=["Vegas Line"],
-                    y=[line_val],
-                    marker_color="#6c757d",
-                    text=[f"{line_val}"],
-                    textposition="auto"
-                ))
-                fig.add_trace(go.Bar(
-                    name="Model Projection",
-                    x=["Model Projection"],
-                    y=[proj_val],
-                    marker_color=bar_color,
-                    text=[f"{proj_val} (Margin: {diff:+0.1f})"],
-                    textposition="auto"
-                ))
+                with st.expander(f"📌 {prop_name} ({book}) — Line: {line_val} | Pick: {side}", expanded=True):
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Vegas Line", f"{line_val}")
+                    c2.metric("Model Projection", f"{proj_val}")
+                    c3.metric("Model Win Prob", format_percentage(win_prob))
+                    c4.metric("EV Edge", format_percentage(ev_val, is_ev=True))
 
-                fig.update_layout(
-                    title=f"{selected_player} — {prop_name}: Projection vs. Line Margin",
-                    yaxis_title="Stat Value",
-                    barmode="group",
-                    height=350,
-                    margin=dict(l=20, r=20, t=40, b=20)
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                    # Built-in comparison bar chart
+                    chart_df = pd.DataFrame({
+                        "Comparison": ["Vegas Line", "Model Projection"],
+                        "Value": [line_val, proj_val]
+                    }).set_index("Comparison")
+                    st.bar_chart(chart_df, color="#28a745")
+
+            # CASE B: Raw Player Projections Sheet (Passing, Rushing, Receiving)
+            else:
+                pred_cols = [c for c in row.index if "Predicted" in str(c) and pd.notna(row[c]) and isinstance(row[c], (int, float))]
+                if pred_cols:
+                    with st.expander(f"📋 Model Projections ({sheet_src})", expanded=True):
+                        chart_data = {c.replace("Predicted ", ""): [float(row[c])] for c in pred_cols}
+                        chart_df = pd.DataFrame(chart_data).T
+                        chart_df.columns = ["Projected Value"]
+                        st.bar_chart(chart_df, color="#007bff")
+
+    if not found_any:
+        st.info("No data entries found for this player.")

@@ -204,7 +204,7 @@ def tag_best_line_advantages(df):
 
     return df
 
-# Common Render Function for Visualizers (Includes Odds & Book Win Prob)
+# Common Render Function for Visualizers (With Copyable Bet Slip)
 def render_prop_visualizer(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
@@ -233,7 +233,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
     for _, r in filtered_df.iterrows():
         p_name = r.get("Milestone (Alt Line)") if is_alt_mode else r.get("Prop")
         
-        # Robust Line Extraction (handles Alt Lines without NaN)
         line = r.get("Line")
         if pd.isna(line) or str(line).strip().lower() in ["nan", "none", ""]:
             m_num = re.search(r"(\d+(\.\d+)?)", str(p_name))
@@ -250,7 +249,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 pos_val = str(r.get(pos_col, ""))
                 book = str(r.get("Book", "DraftKings"))
                 
-                # Robust Side (Never NaN)
                 side = str(r.get("Side", "Over")).strip()
                 if not side or side.lower() in ["nan", "none"]: side = "Over"
                 
@@ -261,7 +259,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 act = str(r.get("Action", "-"))
                 last_5 = str(r.get("Last 5", "-"))
 
-                # Delta between Model Prob and Book Prob
                 prob_delta_str = None
                 try:
                     mp_f = float(model_prob) if abs(float(model_prob)) <= 1.0 else float(model_prob)/100.0
@@ -308,6 +305,17 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         st.info("No props available under this filter.")
         return
 
+    # --------------------------------------------------------------------------
+    # 1-CLICK COPYABLE BET SLIP (FOR GAMBLY / BET TRACKERS)
+    # --------------------------------------------------------------------------
+    with st.expander("📋 1-Click Copy Bet Slip (For Gambly / Bet Trackers)", expanded=False):
+        slip_lines = []
+        for _, row_bet in props_df.iterrows():
+            odds_str = f" ({row_bet['Odds']})" if row_bet['Odds'] != "-" else ""
+            slip_lines.append(f"{row_bet['Player']} {row_bet['Pick']} {format_clean_decimal(row_bet['Vegas Line'])} {row_bet['Prop Name']}{odds_str} [{row_bet['Book']}]")
+        st.caption("Click the copy icon in the top-right corner of the code block below to copy your picks:")
+        st.code("\n".join(slip_lines), language="text")
+
     unique_players = sorted(props_df["Player"].unique())
 
     for player in unique_players:
@@ -317,7 +325,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         player_depth_label = f"({depth_tag})" if depth_tag else ""
 
         with st.container(border=True):
-            # Header with Headshot & Depth Role
             headshot_url = get_headshot_url(player)
             h_col1, h_col2 = st.columns([1, 7])
             with h_col1:
@@ -327,7 +334,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 st.markdown(f"## {player} — {team_tag} **{player_depth_label}**")
                 st.caption(f"Props Available: {len(p_props)}")
 
-            # Scorecards with Odds, Book Win Prob, and Model Win Prob
             cols_per_row = 3
             for i in range(0, len(p_props), cols_per_row):
                 batch = p_props.iloc[i:i + cols_per_row]
@@ -340,14 +346,12 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                             st.markdown(f"#### 📌 {r['Prop Name']} [{b_html}] {star_badge}", unsafe_allow_html=True)
                             st.markdown(f"**Pick:** `{r['Pick']}` | **Action:** `{r['Action']}`")
                             
-                            # Row 1: Line & Odds, Model Proj, EV Edge
                             m1, m2, m3 = st.columns(3)
                             odds_display = f" ({r['Odds']})" if r['Odds'] != "-" else ""
                             m1.metric("Line & Odds", f"{format_clean_decimal(r['Vegas Line'])}{odds_display}")
                             m2.metric("Model Proj", format_clean_decimal(r['Model Projection']), delta=f"{r['Margin']:+0.1f}")
                             m3.metric("EV Edge", r['EV'])
                             
-                            # Row 2: Book Win Prob vs Model Win Prob
                             m4, m5 = st.columns(2)
                             m4.metric("Book Win Prob", r['Book Win Prob'])
                             m5.metric("Model Win Prob", r['Win Prob'], delta=r['Prob Delta'])
@@ -447,7 +451,7 @@ elif app_mode == "⚡ Pro Visualizer: Alt Lines":
         render_prop_visualizer(alt_df, is_alt_mode=True)
 
 # ==============================================================================
-# SCREEN 3: BEST OF THE BEST (FIXED NAN NAN + ADDED ODDS & PROBABILITIES)
+# SCREEN 3: BEST OF THE BEST (WITH 1-CLICK COPYABLE BET SLIP)
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
     st.title("💎 Best of the Best (Top Conviction Plays)")
@@ -468,17 +472,35 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
 
         st.caption("Showing the top conviction bets on the slate clearing dual model edge and market devig.")
 
+        # 1-CLICK COPYABLE BET SLIP FOR BEST OF THE BEST
+        with st.expander("📋 1-Click Copy Bet Slip (For Gambly / Bet Trackers)", expanded=True):
+            best_slip_lines = []
+            for _, r_best in best_plays.iterrows():
+                p_n = r_best.get("Prop") or r_best.get("Milestone (Alt Line)")
+                side_c = "Over" if pd.isna(r_best.get("Side")) or str(r_best.get("Side")).strip().lower() in ["nan", "none", ""] else str(r_best.get("Side")).strip()
+                
+                line_v = r_best.get("Line")
+                if pd.isna(line_v) or str(line_v).strip().lower() in ["nan", "none", ""]:
+                    m_num = re.search(r"(\d+(\.\d+)?)", str(p_n))
+                    line_c = m_num.group(1) if m_num else str(p_n)
+                else:
+                    line_c = format_clean_decimal(line_v)
+                    
+                odds_c = format_american_odds(r_best.get("Odds", "-"))
+                odds_str = f" ({odds_c})" if odds_c != "-" else ""
+                best_slip_lines.append(f"{r_best['Player']} {side_c} {line_c} {p_n}{odds_str} [{r_best['Book']}]")
+            st.caption("Click the copy icon in the top-right corner to copy all top bets to clipboard:")
+            st.code("\n".join(best_slip_lines), language="text")
+
         for rank, (_, row) in enumerate(best_plays.iterrows(), 1):
             p_name = row["Player"]
             prop_n = row.get("Prop") or row.get("Milestone (Alt Line)")
             book_s = get_book_styled(row["Book"])
             headshot_url = get_headshot_url(p_name)
 
-            # Robust Side (Never NaN)
             side_raw = str(row.get("Side", "")).strip()
             side_clean = "Over" if not side_raw or side_raw.lower() in ["nan", "none"] else side_raw
 
-            # Robust Line (Never NaN)
             line_raw = row.get("Line")
             if pd.isna(line_raw) or str(line_raw).lower() in ["nan", "none", ""]:
                 m_num = re.search(r"(\d+(\.\d+)?)", str(prop_n))

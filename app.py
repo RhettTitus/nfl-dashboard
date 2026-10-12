@@ -115,16 +115,7 @@ if app_mode == "📋 Master EV Tables":
 elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
     st.title("📊 Pro Betting Visualizer")
 
-    # Load last 5 historical slates in chronological order
-    recent_5_slates = sorted(dated_files[:5], key=lambda x: x["date"])  # Oldest to Newest for trend
-    history_dfs = {}
-    for slate_info in recent_5_slates:
-        try:
-            history_dfs[slate_info["label"]] = pd.ExcelFile(os.path.join(DATA_FOLDER, slate_info["filename"]))
-        except:
-            pass
-
-    # Extract current slate records
+    # Extract all betting records across sheets
     all_player_rows = []
     for sheet in excel_data.sheet_names:
         if sheet == "How To Use":
@@ -149,6 +140,7 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
 
+    # Filter Controls
     f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
     with f_col1:
         team_list = ["All Teams"] + sorted(combined_df[team_col].dropna().astype(str).unique().tolist()) if team_col else ["All Teams"]
@@ -186,6 +178,7 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
                 ev = r.get("EV", "-")
                 prob = r.get("Model Win Prob", "-")
                 act = str(r.get("Action", "-"))
+                last_5 = str(r.get("Last 5", "-"))
 
                 prop_rows.append({
                     "Player": player_name,
@@ -195,6 +188,7 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
                     "Prop Name": str(p_name),
                     "Vegas Line": line_f,
                     "Model Projection": proj_f,
+                    "Last 5": last_5,
                     "Pick": side,
                     "Margin": round(proj_f - line_f, 1),
                     "EV": format_percentage(ev, is_ev=True),
@@ -279,70 +273,69 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
             )
 
             zero_line = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color="#4A5568", strokeDash=[2, 2]).encode(x="x:Q")
-
             chart_edge_final = (bars_edge + text_edge + zero_line).properties(height=max(120, len(edge_df) * 35))
             st.altair_chart(chart_edge_final, use_container_width=True)
 
             # ------------------------------------------------------------------
-            # VISUAL 2: ROLLING 5-SLATE HIT RATE TREND CHART
+            # VISUAL 2: ROLLING HIT RATE TREND CHART (LAST 5 GAMES)
             # ------------------------------------------------------------------
-            st.markdown("#### 📈 Rolling Hit Rate & Slate Trend (Last 5 Slates)")
-            
+            st.markdown("#### 📈 Rolling Hit Rate & Game Trend (Last 5 Games)")
+
             for _, r_prop in player_props.iterrows():
                 target_prop_name = r_prop["Prop Name"]
                 cur_line = r_prop["Vegas Line"]
                 book_tag = r_prop["Book"]
+                last_5_raw = str(r_prop.get("Last 5", "")).strip()
 
-                trend_points = []
-                for slate_label, h_excel in history_dfs.items():
-                    val = None
-                    for s_name in h_excel.sheet_names:
-                        if s_name == "How To Use": continue
-                        s_df = pd.read_excel(h_excel, sheet_name=s_name)
-                        p_sub = s_df[s_df.astype(str).apply(lambda row: player.lower() in row.to_string().lower(), axis=1)]
-                        if not p_sub.empty:
-                            matched = p_sub[p_sub.astype(str).apply(lambda row: target_prop_name.lower() in row.to_string().lower(), axis=1)]
-                            if not matched.empty:
-                                for cand in ["Line", "Projection", "Predicted " + target_prop_name]:
-                                    if cand in matched.columns and pd.notna(matched[cand].iloc[0]):
-                                        try:
-                                            val = float(matched[cand].iloc[0])
-                                            break
-                                        except: pass
-                            if val is not None: break
-                    if val is not None:
-                        trend_points.append({"Slate": slate_label, "Value": val, "Line": cur_line})
+                if last_5_raw and last_5_raw != "-" and last_5_raw != "nan":
+                    try:
+                        stats_list = [float(x.strip()) for x in last_5_raw.split(",") if x.strip()]
+                    except Exception:
+                        stats_list = []
 
-                if len(trend_points) >= 2:
-                    t_df = pd.DataFrame(trend_points)
-                    t_df["Result"] = t_df["Value"].apply(lambda v: "Over Hit" if v >= cur_line else "Under Miss")
-                    hits = sum(t_df["Value"] >= cur_line)
-                    total = len(t_df)
-                    hit_pct = round((hits / total) * 100)
+                    if stats_list:
+                        trend_points = []
+                        total_games = len(stats_list)
+                        for idx, val in enumerate(stats_list):
+                            # Chronological game labels: G-5 (oldest) up to G-1 (most recent)
+                            g_label = f"G-{total_games - idx}" if (total_games - idx) > 1 else "Last Game"
+                            trend_points.append({
+                                "Game": g_label,
+                                "Value": val,
+                                "Line": cur_line
+                            })
 
-                    st.markdown(f"**📌 {target_prop_name} `[{book_tag}]` — Line: `{cur_line}` | Hit Rate: `{hits}/{total} ({hit_pct}%)`**")
+                        t_df = pd.DataFrame(trend_points)
+                        t_df["Result"] = t_df["Value"].apply(lambda v: "Over Hit" if v >= cur_line else "Under Miss")
+                        hits = sum(t_df["Value"] >= cur_line)
+                        total = len(t_df)
+                        hit_pct = round((hits / total) * 100)
 
-                    hit_bars = alt.Chart(t_df).mark_bar(size=24, cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
-                        x=alt.X("Slate:N", title="Slate Date", sort=None),
-                        y=alt.Y("Value:Q", title="Stat Value"),
-                        color=alt.Color(
-                            "Result:N",
-                            scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#10B981", "#EF4444"]),
-                            legend=alt.Legend(title=None, orient="top")
+                        st.markdown(f"**📌 {target_prop_name} `[{book_tag}]` — Line: `{cur_line}` | Hit Rate: `{hits}/{total} ({hit_pct}%)`**")
+
+                        hit_bars = alt.Chart(t_df).mark_bar(size=26, cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
+                            x=alt.X("Game:N", title="Recent Game Log", sort=None),
+                            y=alt.Y("Value:Q", title="Stat Value"),
+                            color=alt.Color(
+                                "Result:N",
+                                scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#10B981", "#EF4444"]),
+                                legend=alt.Legend(title=None, orient="top")
+                            )
                         )
-                    )
 
-                    ref_line = alt.Chart(pd.DataFrame({"y": [cur_line]})).mark_rule(
-                        color="#2563EB", strokeWidth=2, strokeDash=[4, 4]
-                    ).encode(y="y:Q")
+                        ref_line = alt.Chart(pd.DataFrame({"y": [cur_line]})).mark_rule(
+                            color="#2563EB", strokeWidth=2, strokeDash=[4, 4]
+                        ).encode(y="y:Q")
 
-                    bar_text = alt.Chart(t_df).mark_text(dy=-8, fontSize=11, fontWeight="bold").encode(
-                        x=alt.X("Slate:N", sort=None),
-                        y=alt.Y("Value:Q"),
-                        text=alt.Text("Value:Q", format=".1f")
-                    )
+                        bar_text = alt.Chart(t_df).mark_text(dy=-8, fontSize=11, fontWeight="bold").encode(
+                            x=alt.X("Game:N", sort=None),
+                            y=alt.Y("Value:Q"),
+                            text=alt.Text("Value:Q", format=".1f")
+                        )
 
-                    trend_chart = (hit_bars + bar_text + ref_line).properties(height=220)
-                    st.altair_chart(trend_chart, use_container_width=True)
+                        trend_chart = (hit_bars + bar_text + ref_line).properties(height=230)
+                        st.altair_chart(trend_chart, use_container_width=True)
+                    else:
+                        st.caption(f"ℹ️ {target_prop_name} `[{book_tag}]`: No recent game stats recorded.")
                 else:
-                    st.caption(f"ℹ️ {target_prop_name} `[{book_tag}]`: Needs 2+ dated sheets in `./data` to display rolling trend.")
+                    st.caption(f"ℹ️ {target_prop_name} `[{book_tag}]`: No recent game stats recorded.")

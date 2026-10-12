@@ -4,7 +4,6 @@ import os
 import re
 from datetime import datetime
 import altair as alt
-import requests
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
@@ -41,23 +40,23 @@ dated_files.sort(key=lambda x: x["date"], reverse=True)
 latest_file = dated_files[0]["filename"]
 
 # --------------------------------------------------------------------------
-# 2. OFFICIAL NFL HEADSHOT FETCHER (CACHED)
+# 2. OFFICIAL NFL HEADSHOT LOADER (CACHED VIA OPEN NFLVERSE CDN)
 # --------------------------------------------------------------------------
 @st.cache_data(ttl=86400)
-def get_player_headshot_url(player_name):
+def load_official_headshots():
     try:
-        clean_name = player_name.strip().replace(" ", "%20")
-        url = f"https://site.web.api.espn.com/apis/common/v3/search?region=us&lang=en&query={clean_name}&limit=1&type=player"
-        r = requests.get(url, timeout=3)
-        if r.status_code == 200:
-            items = r.json().get("items", [])
-            if items:
-                img = items[0].get("images", [{}])[0].get("url")
-                if img: return img
-    except:
-        pass
-    # Fallback to standard NFL silhouette
-    return "https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/default.png&w=150&h=150"
+        url = "https://raw.githubusercontent.com/nflverse/nflverse-data/master/rosters/roster_2024.csv"
+        df = pd.read_csv(url, usecols=["full_name", "headshot_url"]).dropna()
+        df["clean"] = df["full_name"].astype(str).str.lower().str.replace(r"[^\w\s]", "", regex=True).str.strip()
+        return dict(zip(df["clean"], df["headshot_url"]))
+    except Exception:
+        return {}
+
+headshot_db = load_official_headshots()
+
+def get_headshot_url(player_name):
+    c_name = re.sub(r"[^\w\s]", "", str(player_name).lower()).strip()
+    return headshot_db.get(c_name, None)
 
 # --------------------------------------------------------------------------
 # SIDEBAR NAVIGATION
@@ -129,7 +128,7 @@ if app_mode == "📋 Master EV Tables":
             st.dataframe(df.style.apply(highlight_actions, axis=1), use_container_width=True, height=550)
 
 # ==============================================================================
-# SCREEN 2: PRO BETTING VISUALIZER (WITH HEADSHOTS & FIXED LABELS)
+# SCREEN 2: PRO BETTING VISUALIZER (FIXED SPACING & RELIABLE HEADSHOTS)
 # ==============================================================================
 elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
     st.title("📊 Pro Betting Visualizer")
@@ -231,7 +230,7 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
         st.stop()
 
     # --------------------------------------------------------------------------
-    # STACKED BREAKDOWNS PER PLAYER WITH HEADSHOTS
+    # STACKED BREAKDOWNS PER PLAYER
     # --------------------------------------------------------------------------
     unique_players = sorted(props_df["Player"].unique())
 
@@ -240,14 +239,17 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
         team_tag = player_props["Team"].iloc[0] if not player_props.empty else ""
 
         with st.container(border=True):
-            # Header with Player Headshot
-            headshot_url = get_player_headshot_url(player)
-            h_col1, h_col2 = st.columns([1, 6])
+            # Reliable NFL Headshot Layout
+            headshot_img = get_headshot_url(player)
+            h_col1, h_col2 = st.columns([1, 7])
             with h_col1:
-                st.image(headshot_url, width=90)
+                if headshot_img:
+                    st.image(headshot_img, width=85)
+                else:
+                    st.markdown("## 🏈")
             with h_col2:
                 st.markdown(f"## {player}")
-                st.caption(f"🏈 **Team:** {team_tag} | Active Props: {len(player_props)}")
+                st.caption(f"**Team:** {team_tag} | Posted Props: {len(player_props)}")
 
             # Scorecards
             cols_per_row = 3
@@ -267,18 +269,37 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
                             m4.metric("EV Edge", r['EV'])
 
             # ------------------------------------------------------------------
-            # VISUAL 1: CLEAN HORIZONTAL EDGE BAR CHART (NO OVERLAP)
+            # VISUAL 1: SPACED-OUT HORIZONTAL EDGE CHART (NO BLEEDING / OVERLAP)
             # ------------------------------------------------------------------
             st.markdown("#### ⚡ Model Edge / Margin vs. Vegas Line")
             st.caption("Green bars extend right (Model Over) | Red bars extend left (Model Under)")
 
-            # Deduplicate strictly for charting to prevent double-printed text marks
-            edge_df = player_props.drop_duplicates(subset=["Prop Label"]).copy()
+            # Deduplicate strictly so only 1 row exists per label
+            edge_df = player_props.groupby("Prop Label", as_index=False).first()
             edge_df["Edge Color"] = edge_df["Margin"].apply(lambda m: "Over Edge" if m >= 0 else "Under Edge")
 
-            bars_edge = alt.Chart(edge_df).mark_bar(size=18, cornerRadiusTopLeft=3, cornerRadiusBottomLeft=3).encode(
-                y=alt.Y("Prop Label:N", title=None, sort="-x", axis=alt.Axis(labelLimit=200)),
-                x=alt.X("Margin:Q", title="Model Advantage (Margin vs. Line)"),
+            # Dynamic domain buffer so labels on the tips never collide with chart boundaries
+            max_m = max(abs(edge_df["Margin"].max()), abs(edge_df["Margin"].min()), 1.0)
+            x_domain = [-max_m * 1.35, max_m * 1.35]
+
+            bars_edge = alt.Chart(edge_df).mark_bar(
+                size=18, 
+                cornerRadiusTopRight=4, 
+                cornerRadiusBottomRight=4,
+                cornerRadiusTopLeft=4,
+                cornerRadiusBottomLeft=4
+            ).encode(
+                y=alt.Y(
+                    "Prop Label:N", 
+                    title=None, 
+                    sort="-x", 
+                    axis=alt.Axis(offset=15, labelPadding=12, labelLimit=220)
+                ),
+                x=alt.X(
+                    "Margin:Q", 
+                    title="Model Advantage (Margin vs. Line)", 
+                    scale=alt.Scale(domain=x_domain)
+                ),
                 color=alt.Color(
                     "Edge Color:N",
                     scale=alt.Scale(domain=["Over Edge", "Under Edge"], range=["#10B981", "#EF4444"]),
@@ -286,7 +307,6 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
                 )
             )
 
-            # Clean outer text label (Never collides with axis or bar)
             text_edge = alt.Chart(edge_df).mark_text(
                 align=alt.expr("datum.Margin >= 0 ? 'left' : 'right'"),
                 dx=alt.expr("datum.Margin >= 0 ? 8 : -8"),
@@ -299,7 +319,11 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
             )
 
             zero_line = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color="#4A5568", strokeDash=[3, 3]).encode(x="x:Q")
-            chart_edge_final = (bars_edge + text_edge + zero_line).properties(height=max(110, len(edge_df) * 38))
+
+            # Step(44) forces 26px of clean vertical space between adjacent bars!
+            chart_edge_final = (bars_edge + text_edge + zero_line).properties(
+                height=alt.Step(44)
+            )
             st.altair_chart(chart_edge_final, use_container_width=True)
 
             # ------------------------------------------------------------------

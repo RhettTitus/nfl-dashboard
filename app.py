@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import os
+import re
+from datetime import datetime
 import altair as alt
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
@@ -8,20 +10,45 @@ st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="�
 DATA_FOLDER = "./data"
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
-files = sorted([f for f in os.listdir(DATA_FOLDER) if f.endswith(".xlsx")], reverse=True)
+# --------------------------------------------------------------------------
+# 1. SMART DATE-BASED FILE DETECTOR
+# --------------------------------------------------------------------------
+def parse_slate_date(filename):
+    m = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{2,4})\.xlsx$", filename)
+    if m:
+        month, day, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        full_year = 2000 + year if year < 100 else year
+        try:
+            return datetime(full_year, month, day)
+        except:
+            return None
+    return None
 
-if not files:
-    st.info("👋 Welcome! Run your Colab script to push the first slate here.")
+all_raw_files = [f for f in os.listdir(DATA_FOLDER) if f.endswith(".xlsx")]
+dated_files = []
+
+for f in all_raw_files:
+    d = parse_slate_date(f)
+    if d:
+        dated_files.append({"filename": f, "date": d, "label": d.strftime("%m/%d/%y")})
+
+if not dated_files:
+    st.info("👋 No dated spreadsheets (e.g. 10-9-26.xlsx) found in `./data`. Push a slate from Colab to begin!")
     st.stop()
+
+# Sort chronologically (newest first)
+dated_files.sort(key=lambda x: x["date"], reverse=True)
+latest_file = dated_files[0]["filename"]
 
 # --------------------------------------------------------------------------
 # SIDEBAR NAVIGATION
 # --------------------------------------------------------------------------
 st.sidebar.title("🏈 NFL Quant Engine")
-selected_file = st.sidebar.selectbox("📅 Select Slate:", files)
+file_names = [x["filename"] for x in dated_files]
+selected_file = st.sidebar.selectbox("📅 Select Slate (Defaults to Latest):", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
-app_mode = st.sidebar.radio("📱 Screen:", ["📋 Master EV Tables", "📊 Team & Player Prop Visualizer"])
+app_mode = st.sidebar.radio("📱 Screen:", ["📋 Master EV Tables", "📊 Pro Betting Visualizer (Hit Rates & Edge)"])
 
 excel_data = pd.ExcelFile(file_path)
 
@@ -30,39 +57,6 @@ def format_percentage(val, is_ev=False):
         return val
     v = val if abs(val) <= 1.0 else val / 100.0
     return f"{v:+.1%}" if is_ev else f"{v:.1%}"
-
-# Helper to draw slim, modern side-by-side charts
-def render_sleek_player_chart(player_props):
-    plot_rows = []
-    for _, r in player_props.iterrows():
-        p_label = f"{r['Prop Name']} [{r['Book']}]"
-        plot_rows.append({"Prop": p_label, "Type": "Vegas Line", "Value": r["Vegas Line"]})
-        plot_rows.append({"Prop": p_label, "Type": "Model Projection", "Value": r["Model Projection"]})
-
-    chart_data = pd.DataFrame(plot_rows)
-
-    # Slim grouped bars with rounded tops
-    bars = alt.Chart(chart_data).mark_bar(size=26, cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
-        x=alt.X("Type:N", title=None, axis=alt.Axis(labels=True, ticks=False)),
-        y=alt.Y("Value:Q", title="Stat Value", scale=alt.Scale(zero=True)),
-        color=alt.Color(
-            "Type:N",
-            scale=alt.Scale(domain=["Vegas Line", "Model Projection"], range=["#64748B", "#10B981"]),
-            legend=alt.Legend(title=None, orient="top")
-        ),
-        column=alt.Column("Prop:N", title=None, header=alt.Header(labelFontSize=12, labelFontWeight="bold"))
-    )
-
-    # Print the exact number right above each bar
-    text = alt.Chart(chart_data).mark_text(dy=-10, fontSize=11, fontWeight="bold").encode(
-        x=alt.X("Type:N"),
-        y=alt.Y("Value:Q"),
-        text=alt.Text("Value:Q", format=".1f"),
-        column=alt.Column("Prop:N")
-    )
-
-    full_chart = (bars + text).properties(height=260)
-    st.altair_chart(full_chart, use_container_width=False)
 
 # ==============================================================================
 # SCREEN 1: MASTER EV TABLES
@@ -116,11 +110,21 @@ if app_mode == "📋 Master EV Tables":
             st.dataframe(df.style.apply(highlight_actions, axis=1), use_container_width=True, height=550)
 
 # ==============================================================================
-# SCREEN 2: TEAM & POSITION VISUALIZER (SLIM MODERN BARS)
+# SCREEN 2: PRO BETTING VISUALIZER (HIT RATES & MARGIN EDGES)
 # ==============================================================================
-elif app_mode == "📊 Team & Player Prop Visualizer":
-    st.title("📊 Team & Position Prop Analytics")
+elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
+    st.title("📊 Pro Betting Visualizer")
 
+    # Load last 5 historical slates in chronological order
+    recent_5_slates = sorted(dated_files[:5], key=lambda x: x["date"])  # Oldest to Newest for trend
+    history_dfs = {}
+    for slate_info in recent_5_slates:
+        try:
+            history_dfs[slate_info["label"]] = pd.ExcelFile(os.path.join(DATA_FOLDER, slate_info["filename"]))
+        except:
+            pass
+
+    # Extract current slate records
     all_player_rows = []
     for sheet in excel_data.sheet_names:
         if sheet == "How To Use":
@@ -130,14 +134,10 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
         if p_col and not sub_df.empty:
             sub_df["Source Sheet"] = sheet
             sub_df["Player"] = sub_df[p_col]
-            
             if "Book" not in sub_df.columns:
-                if "DK" in sheet: sub_df["Book"] = "DraftKings"
-                elif "FD" in sheet: sub_df["Book"] = "FanDuel"
-                else: sub_df["Book"] = sheet
+                sub_df["Book"] = "DraftKings" if "DK" in sheet else ("FanDuel" if "FD" in sheet else sheet)
             else:
                 sub_df["Book"] = sub_df["Book"].fillna(sheet)
-                
             all_player_rows.append(sub_df)
 
     if not all_player_rows:
@@ -150,28 +150,22 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
 
     f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
-
     with f_col1:
         team_list = ["All Teams"] + sorted(combined_df[team_col].dropna().astype(str).unique().tolist()) if team_col else ["All Teams"]
         selected_team = st.selectbox("🏈 Team:", team_list)
-
     with f_col2:
         selected_pos = st.selectbox("🎯 Position:", ["All Positions", "QB", "RB", "WR", "TE"])
-
     with f_col3:
         all_books = ["All Sportsbooks"] + sorted(combined_df["Book"].dropna().astype(str).unique().tolist())
         selected_book = st.selectbox("🎰 Sportsbook:", all_books)
-
     with f_col4:
         market_type = st.selectbox("📊 Prop Type:", ["All Props", "Yards Only", "Counts/Volume Only"])
 
     filtered_df = combined_df.copy()
     if team_col and selected_team != "All Teams":
         filtered_df = filtered_df[filtered_df[team_col].astype(str) == selected_team]
-
     if pos_col and selected_pos != "All Positions":
         filtered_df = filtered_df[filtered_df[pos_col].astype(str).str.contains(selected_pos, case=False, na=False)]
-
     if selected_book != "All Sportsbooks":
         filtered_df = filtered_df[filtered_df["Book"].astype(str) == selected_book]
 
@@ -225,8 +219,9 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
         st.info("No props matching the selected Prop Type.")
         st.stop()
 
-    st.markdown("### 🏆 Stacked Player Breakdowns")
-
+    # --------------------------------------------------------------------------
+    # STACKED BREAKDOWNS PER PLAYER
+    # --------------------------------------------------------------------------
     unique_players = sorted(props_df["Player"].unique())
 
     for player in unique_players:
@@ -236,7 +231,7 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
         with st.container(border=True):
             st.markdown(f"## 👤 {player} ({team_tag})")
 
-            # 1. SCORECARDS TOGETHER
+            # Scorecards
             cols_per_row = 3
             for i in range(0, len(player_props), cols_per_row):
                 batch = player_props.iloc[i:i + cols_per_row]
@@ -246,15 +241,108 @@ elif app_mode == "📊 Team & Player Prop Visualizer":
                         with st.container(border=True):
                             st.markdown(f"#### 📌 {r['Prop Name']} `[{r['Book']}]`")
                             st.markdown(f"**Pick:** `{r['Pick']}` | **Action:** `{r['Action']}`")
-                            
                             m1, m2 = st.columns(2)
                             m1.metric("Vegas Line", f"{r['Vegas Line']}")
                             m2.metric("Model Proj", f"{r['Model Projection']}", delta=f"{r['Margin']:+0.1f}")
-                            
                             m3, m4 = st.columns(2)
                             m3.metric("Win Prob", r['Win Prob'])
                             m4.metric("EV Edge", r['EV'])
 
-            # 2. SLIM, MODERN SIDE-BY-SIDE BARS
-            st.markdown(f"**Side-by-Side Comparison:** *(Slate = Vegas Line | Green = Model Projection)*")
-            render_sleek_player_chart(player_props)
+            # ------------------------------------------------------------------
+            # VISUAL 1: HORIZONTAL EDGE / MARGIN BAR CHART
+            # ------------------------------------------------------------------
+            st.markdown("#### ⚡ Model Edge / Margin vs. Vegas Line")
+            st.caption("Green bars extend right (Model Over) | Red bars extend left (Model Under)")
+
+            edge_df = player_props.copy()
+            edge_df["Edge Color"] = edge_df["Margin"].apply(lambda m: "Over Edge" if m >= 0 else "Under Edge")
+
+            bars_edge = alt.Chart(edge_df).mark_bar(size=20, cornerRadiusTopLeft=3, cornerRadiusBottomLeft=3).encode(
+                y=alt.Y("Prop Label:N", title=None, sort="-x"),
+                x=alt.X("Margin:Q", title="Model Advantage (Margin vs. Line)"),
+                color=alt.Color(
+                    "Edge Color:N",
+                    scale=alt.Scale(domain=["Over Edge", "Under Edge"], range=["#10B981", "#EF4444"]),
+                    legend=alt.Legend(title=None, orient="top")
+                )
+            )
+
+            text_edge = alt.Chart(edge_df).mark_text(
+                align=alt.expr("datum.Margin >= 0 ? 'left' : 'right'"),
+                dx=alt.expr("datum.Margin >= 0 ? 5 : -5"),
+                fontSize=11,
+                fontWeight="bold"
+            ).encode(
+                y=alt.Y("Prop Label:N", sort="-x"),
+                x=alt.X("Margin:Q"),
+                text=alt.Text("Margin:Q", format="+.1f")
+            )
+
+            zero_line = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color="#4A5568", strokeDash=[2, 2]).encode(x="x:Q")
+
+            chart_edge_final = (bars_edge + text_edge + zero_line).properties(height=max(120, len(edge_df) * 35))
+            st.altair_chart(chart_edge_final, use_container_width=True)
+
+            # ------------------------------------------------------------------
+            # VISUAL 2: ROLLING 5-SLATE HIT RATE TREND CHART
+            # ------------------------------------------------------------------
+            st.markdown("#### 📈 Rolling Hit Rate & Slate Trend (Last 5 Slates)")
+            
+            for _, r_prop in player_props.iterrows():
+                target_prop_name = r_prop["Prop Name"]
+                cur_line = r_prop["Vegas Line"]
+                book_tag = r_prop["Book"]
+
+                trend_points = []
+                for slate_label, h_excel in history_dfs.items():
+                    val = None
+                    for s_name in h_excel.sheet_names:
+                        if s_name == "How To Use": continue
+                        s_df = pd.read_excel(h_excel, sheet_name=s_name)
+                        p_sub = s_df[s_df.astype(str).apply(lambda row: player.lower() in row.to_string().lower(), axis=1)]
+                        if not p_sub.empty:
+                            matched = p_sub[p_sub.astype(str).apply(lambda row: target_prop_name.lower() in row.to_string().lower(), axis=1)]
+                            if not matched.empty:
+                                for cand in ["Line", "Projection", "Predicted " + target_prop_name]:
+                                    if cand in matched.columns and pd.notna(matched[cand].iloc[0]):
+                                        try:
+                                            val = float(matched[cand].iloc[0])
+                                            break
+                                        except: pass
+                            if val is not None: break
+                    if val is not None:
+                        trend_points.append({"Slate": slate_label, "Value": val, "Line": cur_line})
+
+                if len(trend_points) >= 2:
+                    t_df = pd.DataFrame(trend_points)
+                    t_df["Result"] = t_df["Value"].apply(lambda v: "Over Hit" if v >= cur_line else "Under Miss")
+                    hits = sum(t_df["Value"] >= cur_line)
+                    total = len(t_df)
+                    hit_pct = round((hits / total) * 100)
+
+                    st.markdown(f"**📌 {target_prop_name} `[{book_tag}]` — Line: `{cur_line}` | Hit Rate: `{hits}/{total} ({hit_pct}%)`**")
+
+                    hit_bars = alt.Chart(t_df).mark_bar(size=24, cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
+                        x=alt.X("Slate:N", title="Slate Date", sort=None),
+                        y=alt.Y("Value:Q", title="Stat Value"),
+                        color=alt.Color(
+                            "Result:N",
+                            scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#10B981", "#EF4444"]),
+                            legend=alt.Legend(title=None, orient="top")
+                        )
+                    )
+
+                    ref_line = alt.Chart(pd.DataFrame({"y": [cur_line]})).mark_rule(
+                        color="#2563EB", strokeWidth=2, strokeDash=[4, 4]
+                    ).encode(y="y:Q")
+
+                    bar_text = alt.Chart(t_df).mark_text(dy=-8, fontSize=11, fontWeight="bold").encode(
+                        x=alt.X("Slate:N", sort=None),
+                        y=alt.Y("Value:Q"),
+                        text=alt.Text("Value:Q", format=".1f")
+                    )
+
+                    trend_chart = (hit_bars + bar_text + ref_line).properties(height=220)
+                    st.altair_chart(trend_chart, use_container_width=True)
+                else:
+                    st.caption(f"ℹ️ {target_prop_name} `[{book_tag}]`: Needs 2+ dated sheets in `./data` to display rolling trend.")

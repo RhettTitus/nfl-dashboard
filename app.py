@@ -8,7 +8,7 @@ import altair as alt
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# GLOBAL CSS GUARD (PREVENTS METRICS FROM COLLAPSING TO ...)
+# GLOBAL CSS GUARD (PREVENTS METRICS & BADGES FROM COLLAPSING)
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -137,9 +137,10 @@ def format_american_odds(val):
     except:
         return str(val)
 
+# Unbreakable Best Line Badge (Never splits or cuts off)
 def get_best_line_badge_html(line_adv_note):
     if line_adv_note:
-        return f'<span style="background-color:#FEF3C7; color:#92400E; padding:3px 8px; border-radius:12px; font-weight:bold; font-size:11px; border:1px solid #F59E0B; margin-left:6px;">{line_adv_note}</span>'
+        return f'<span style="background-color:#FEF3C7; color:#92400E; padding:3px 9px; border-radius:12px; font-weight:bold; font-size:11px; border:1px solid #F59E0B; white-space:nowrap; display:inline-block; flex-shrink:0;">{line_adv_note}</span>'
     return ""
 
 def extract_sanitized_prop_and_line(r):
@@ -162,10 +163,9 @@ def extract_sanitized_prop_and_line(r):
     return p_name, line_val
 
 # --------------------------------------------------------------------------
-# AUTO-DERIVE BOOK WIN PROBABILITY (HANDLES AMERICAN & DECIMAL ODDS, NEVER "UNPOSTED")
+# AUTO-DERIVE BOOK WIN PROBABILITY (HANDLES AMERICAN & DECIMAL ODDS)
 # --------------------------------------------------------------------------
 def get_or_calculate_book_prob(book_prob_raw, odds_raw):
-    # 1. Direct percentage check
     if pd.notna(book_prob_raw) and str(book_prob_raw).strip().lower() not in ["-", "nan", "none", "", "unposted"]:
         try:
             v = float(str(book_prob_raw).replace("%", "").strip())
@@ -173,7 +173,6 @@ def get_or_calculate_book_prob(book_prob_raw, odds_raw):
         except:
             pass
 
-    # 2. Derive from odds (handles American and Decimal odds)
     if pd.notna(odds_raw) and str(odds_raw).strip().lower() not in ["-", "nan", "none", "", "unposted"]:
         try:
             o_clean = str(odds_raw).replace("+", "").strip()
@@ -182,7 +181,7 @@ def get_or_calculate_book_prob(book_prob_raw, odds_raw):
                 return 100.0 / (o_num + 100.0)
             elif o_num <= -100:
                 return abs(o_num) / (abs(o_num) + 100.0)
-            elif 1.01 <= o_num < 50.0:  # Decimal odds fallback
+            elif 1.01 <= o_num < 50.0:
                 return 1.0 / o_num
         except:
             pass
@@ -297,7 +296,7 @@ def render_gambly_copy_box(df, box_title="📋 Gambly / Tracker Copy Slip"):
         else:
             st.info(f"No bets available for {c_book} under current filters.")
 
-# Common Render Function for Visualizers (Grouped Hit Rates in Strict Chronological Order)
+# Common Render Function for Visualizers (With Clean Flexbox Card Headers)
 def render_prop_visualizer(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
@@ -349,7 +348,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             act = str(r.get("Action", "-"))
             last_5 = str(r.get("Last 5", "-"))
 
-            # Calculate Book Implied Prob from Odds (Outputs clean '-' if none, never 'Unposted')
             calc_bp = get_or_calculate_book_prob(book_prob_raw, odds_val)
             book_prob_str = format_percentage(calc_bp) if calc_bp is not None else "-"
 
@@ -420,7 +418,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 st.markdown(f"## {player} — {team_tag} **{player_depth_label}**")
                 st.caption(f"Props Available: {len(p_props)}")
 
-            # Scorecards (2 Spacious Cards per Row)
+            # 2 Spacious Cards per Row
             cols_per_row = 2
             for i in range(0, len(p_props), cols_per_row):
                 batch = p_props.iloc[i:i + cols_per_row]
@@ -430,7 +428,19 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                         with st.container(border=True):
                             b_html = get_book_styled(r['Book'])
                             star_badge = get_best_line_badge_html(r['Line_Adv_Note'])
-                            st.markdown(f"#### 📌 {r['Prop Name']} [{b_html}] {star_badge}", unsafe_allow_html=True)
+                            
+                            # Clean Flexbox Header (Guarantees badge never wraps awkwardly)
+                            card_title_html = f"""
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px;">
+                                <div style="font-size:1.10rem; font-weight:700; color:#0F172A; line-height:1.3;">
+                                    📌 {r['Prop Name']} [{b_html}]
+                                </div>
+                                <div style="flex-shrink:0;">
+                                    {star_badge}
+                                </div>
+                            </div>
+                            """
+                            st.markdown(card_title_html, unsafe_allow_html=True)
                             st.markdown(f"**Pick:** `{r['Pick']}` | **Action:** `{r['Action']}`")
                             
                             # Row 1
@@ -440,12 +450,12 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                             m2.metric("Model Proj", format_clean_decimal(r['Model Projection']), delta=f"{r['Margin']:+0.1f}")
                             m3.metric("EV Edge", r['EV'])
                             
-                            # Row 2 (With Book Win Prob Clean '-')
+                            # Row 2
                             m4, m5 = st.columns(2)
                             m4.metric("Book Win Prob", r['Book Win Prob'])
                             m5.metric("Model Win Prob", r['Win Prob'], delta=r['Prob Delta'])
 
-            # Visual 1: Horizontal Edge Chart
+            # Visual 1: Horizontal Edge Chart (labelLimit=0 disables all '...' truncation)
             st.markdown("#### ⚡ Model Edge / Margin vs. Vegas Line")
             
             edge_df = p_props.groupby("Prop Label", as_index=False).first().copy()
@@ -481,12 +491,10 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             # Visual 2: Grouped Hit Rates (Grouped by Prop Name in Strict Chronological Order)
             st.markdown("#### 📈 Rolling Hit Rate & Game Trend (Last 5 Games — Chronological)")
 
-            # Group all lines belonging to the same base prop (e.g., all "Pass Yds" lines together)
             grouped_props = p_props.groupby("Prop Name")
             has_l5 = False
 
             for base_prop_name, grp in grouped_props:
-                # Find valid Last 5 stats for this prop
                 last_5_raw = ""
                 for _, r_cand in grp.iterrows():
                     l5_c = str(r_cand.get("Last 5", "")).strip()
@@ -504,7 +512,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                         has_l5 = True
                         total_g = len(stats_list)
 
-                        # Strict Chronological Labels (Left = Oldest, Right = Latest)
                         chronological_labels = []
                         trend_points = []
                         for idx, val in enumerate(stats_list):
@@ -514,7 +521,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
 
                         t_df = pd.DataFrame(trend_points)
 
-                        # Header listing all books and lines available for this prop
                         book_badges_summary = []
                         for _, b_row in grp.iterrows():
                             b_html = get_book_styled(b_row["Book"])
@@ -526,13 +532,11 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
 
                         st.markdown(f"**📌 {base_prop_name}:** " + " | ".join(book_badges_summary), unsafe_allow_html=True)
 
-                        # Base primary line for coloring
                         primary_line = grp["Vegas Line"].iloc[0]
                         t_df["Result"] = t_df["Value"].apply(lambda v: "Over Hit" if v >= primary_line else "Under Miss")
 
                         y_max = max(max(t_df["Value"]), grp["Vegas Line"].max()) * 1.30
 
-                        # Bars explicitly sorted in chronological order (G1 to G5)
                         hit_bars = alt.Chart(t_df).mark_bar(size=26, cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
                             x=alt.X("Game:N", title="Chronological Game Log (Oldest ➔ Latest)", sort=chronological_labels, axis=alt.Axis(labelLimit=0)),
                             y=alt.Y("Value:Q", title="Stat Value", scale=alt.Scale(domain=[0, y_max])),
@@ -543,7 +547,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                             x=alt.X("Game:N", sort=chronological_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f")
                         )
 
-                        # Reference lines for each sportsbook line
                         ref_lines = []
                         for _, b_row in grp.iterrows():
                             c_line = b_row["Vegas Line"]
@@ -667,7 +670,6 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
             odds_clean = format_american_odds(row.get("Odds", "-"))
             odds_str = f" ({odds_clean})" if odds_clean != "-" else ""
 
-            # Ensure Book Win Prob is populated (derives from odds if missing, never displays "Unposted")
             calc_bp_best = get_or_calculate_book_prob(row.get("Book Win Prob"), row.get("Odds"))
             book_prob = format_percentage(calc_bp_best) if calc_bp_best is not None else "-"
             

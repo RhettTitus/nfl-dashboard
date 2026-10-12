@@ -82,83 +82,103 @@ if app_mode == "📋 Master EV Tables":
             st.dataframe(df.style.apply(highlight_actions, axis=1), use_container_width=True, height=550)
 
 # ==============================================================================
-# SCREEN 2: DYNAMIC PLAYER PROP DEEP DIVE & CHARTS
+# SCREEN 2: ALL PROPS IN CONSOLIDATED CHARTS
 # ==============================================================================
 elif app_mode == "📊 Player Prop Deep Dive":
     st.title("📊 Player Prop Analytics & Visuals")
 
-    # Dynamically find ALL sheets that have a 'Player' column
-    player_dfs = []
+    # Gather all player records across every sheet
+    all_player_rows = []
     for sheet in excel_data.sheet_names:
         if sheet == "How To Use":
             continue
         sub_df = pd.read_excel(excel_data, sheet_name=sheet)
-        # Check if Player column exists
         p_col = next((c for c in sub_df.columns if c.strip().lower() == "player"), None)
         if p_col and not sub_df.empty:
             sub_df["Source Sheet"] = sheet
-            sub_df["Player"] = sub_df[p_col]  # Standardize name
-            player_dfs.append(sub_df)
+            sub_df["Player"] = sub_df[p_col]
+            all_player_rows.append(sub_df)
 
-    if not player_dfs:
-        st.warning(f"Could not find any sheets containing player data in: {selected_file}")
-        st.info(f"Available sheets found: {excel_data.sheet_names}")
+    if not all_player_rows:
+        st.warning("No player data found in this workbook.")
         st.stop()
 
-    # Collect all unique player names across every sheet
-    all_players = set()
-    for df in player_dfs:
-        all_players.update(df["Player"].dropna().unique())
-    player_list = sorted(list(all_players))
+    combined_df = pd.concat(all_player_rows, ignore_index=True)
+    player_list = sorted(combined_df["Player"].dropna().unique())
 
     selected_player = st.selectbox("👤 Select Player:", player_list)
+    p_data = combined_df[combined_df["Player"] == selected_player]
 
-    st.subheader(f"Data & Projections for: {selected_player}")
+    st.subheader(f"All Props & Projections for: {selected_player}")
 
-    found_any = False
-    for df in player_dfs:
-        p_matches = df[df["Player"] == selected_player]
-        if p_matches.empty:
-            continue
+    # Extract all betting lines for this player
+    prop_rows = []
+    for _, r in p_data.iterrows():
+        p_name = r.get("Prop") or r.get("Milestone (Alt Line)")
+        line = r.get("Line")
+        proj = r.get("Projection")
 
-        sheet_src = p_matches["Source Sheet"].iloc[0]
+        if pd.notna(p_name) and pd.notna(line) and pd.notna(proj):
+            try:
+                line_f = float(line)
+                proj_f = float(proj)
+                book = str(r.get("Book", r.get("Source Sheet", "")))
+                side = str(r.get("Side", "Over"))
+                ev = r.get("EV", "-")
+                prob = r.get("Model Win Prob", "-")
+                act = str(r.get("Action", "-"))
 
-        for _, row in p_matches.iterrows():
-            found_any = True
-            prop_name = row.get("Prop") or row.get("Milestone (Alt Line)")
+                label = f"{p_name} ({book})"
+                prop_rows.append({
+                    "Prop Label": label,
+                    "Prop Name": str(p_name),
+                    "Vegas Line": line_f,
+                    "Model Projection": proj_f,
+                    "Pick": side,
+                    "Edge / Margin": round(proj_f - line_f, 1),
+                    "EV": format_percentage(ev, is_ev=True),
+                    "Win Prob": format_percentage(prob),
+                    "Action": act
+                })
+            except:
+                pass
 
-            # CASE A: It is a Betting Line (has Line and Projection)
-            if pd.notna(row.get("Line")) and pd.notna(row.get("Projection")):
-                line_val = float(row["Line"])
-                proj_val = float(row["Projection"])
-                side = row.get("Side", "Over")
-                book = row.get("Book", sheet_src)
-                ev_val = row.get("EV", "-")
-                win_prob = row.get("Model Win Prob", "-")
+    if prop_rows:
+        props_df = pd.DataFrame(prop_rows).drop_duplicates(subset=["Prop Label"])
 
-                with st.expander(f"📌 {prop_name} ({book}) — Line: {line_val} | Pick: {side}", expanded=True):
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Vegas Line", f"{line_val}")
-                    c2.metric("Model Projection", f"{proj_val}")
-                    c3.metric("Model Win Prob", format_percentage(win_prob))
-                    c4.metric("EV Edge", format_percentage(ev_val, is_ev=True))
+        # Split into Yardage vs Counts for clean chart scaling
+        yards_mask = props_df["Prop Name"].str.contains("Yds|Yards", case=False, na=False)
+        yards_df = props_df[yards_mask]
+        counts_df = props_df[~yards_mask]
 
-                    # Built-in comparison bar chart
-                    chart_df = pd.DataFrame({
-                        "Comparison": ["Vegas Line", "Model Projection"],
-                        "Value": [line_val, proj_val]
-                    }).set_index("Comparison")
-                    st.bar_chart(chart_df, color="#28a745")
+        # 1. YARDAGE PROPS (PASS / RUSH / REC YDS)
+        if not yards_df.empty:
+            st.markdown("### 📈 Yardage Props (Line vs. Projection)")
+            chart_y = yards_df.set_index("Prop Label")[["Vegas Line", "Model Projection"]]
+            st.bar_chart(chart_y)
 
-            # CASE B: Raw Player Projections Sheet (Passing, Rushing, Receiving)
-            else:
-                pred_cols = [c for c in row.index if "Predicted" in str(c) and pd.notna(row[c]) and isinstance(row[c], (int, float))]
-                if pred_cols:
-                    with st.expander(f"📋 Model Projections ({sheet_src})", expanded=True):
-                        chart_data = {c.replace("Predicted ", ""): [float(row[c])] for c in pred_cols}
-                        chart_df = pd.DataFrame(chart_data).T
-                        chart_df.columns = ["Projected Value"]
-                        st.bar_chart(chart_df, color="#007bff")
+        # 2. COUNT / VOLUME PROPS (ATTEMPTS / RECEPTIONS / CARRIES)
+        if not counts_df.empty:
+            st.markdown("### 🎯 Volume & Counts Props (Line vs. Projection)")
+            chart_c = counts_df.set_index("Prop Label")[["Vegas Line", "Model Projection"]]
+            st.bar_chart(chart_c)
 
-    if not found_any:
-        st.info("No data entries found for this player.")
+        # 3. SCORECARD SUMMARY TABLE
+        st.markdown("### 📋 Prop Scorecard Table")
+        table_cols = ["Prop Label", "Pick", "Vegas Line", "Model Projection", "Edge / Margin", "Win Prob", "EV", "Action"]
+        st.dataframe(props_df[table_cols], use_container_width=True)
+
+    else:
+        # Fallback: Raw projections if no betting lines exist
+        raw_preds = {}
+        for _, r in p_data.iterrows():
+            for c in r.index:
+                if "Predicted" in str(c) and pd.notna(r[c]) and isinstance(r[c], (int, float)):
+                    raw_preds[str(c).replace("Predicted ", "")] = float(r[c])
+
+        if raw_preds:
+            st.markdown("### 📋 Model Projections Overview")
+            chart_df = pd.DataFrame(list(raw_preds.items()), columns=["Stat", "Projected Value"]).set_index("Stat")
+            st.bar_chart(chart_df)
+        else:
+            st.info("No active lines or projections found for this player.")

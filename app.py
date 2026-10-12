@@ -49,7 +49,6 @@ def clean_player_name(name):
 @st.cache_data(ttl=86400)
 def load_verified_headshots():
     headshot_map = {}
-    # Verified open nflverse roster releases
     for yr in [2024, 2023]:
         try:
             url = f"https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_{yr}.csv"
@@ -66,14 +65,11 @@ headshot_db = load_verified_headshots()
 
 def get_headshot_url(player_name):
     c_name = clean_player_name(player_name)
-    # 1. Exact match
     if c_name in headshot_db:
         return headshot_db[c_name]
-    # 2. Substring match
     for db_name, url in headshot_db.items():
         if c_name in db_name or db_name in c_name:
             return url
-    # 3. Last name + initial match
     parts = c_name.split()
     if len(parts) >= 2:
         last = parts[-1]
@@ -84,78 +80,38 @@ def get_headshot_url(player_name):
     return None
 
 # --------------------------------------------------------------------------
-# SIDEBAR NAVIGATION
+# SIDEBAR NAVIGATION (VISUALIZER IS FIRST BY DEFAULT)
 # --------------------------------------------------------------------------
 st.sidebar.title("🏈 NFL Quant Engine")
 file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate (Defaults to Latest):", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
-app_mode = st.sidebar.radio("📱 Screen:", ["📋 Master EV Tables", "📊 Pro Betting Visualizer (Hit Rates & Edge)"])
+# Screen Switcher: Visualizer is #1, Master Tables is #2
+app_mode = st.sidebar.radio("📱 Screen:", ["📊 Pro Betting Visualizer (Hit Rates & Edge)", "📋 Master EV Tables"])
 
 excel_data = pd.ExcelFile(file_path)
 
+# Percentage Formatter
 def format_percentage(val, is_ev=False):
     if pd.isna(val) or val == "-" or not isinstance(val, (int, float)):
         return val
     v = val if abs(val) <= 1.0 else val / 100.0
     return f"{v:+.1%}" if is_ev else f"{v:.1%}"
 
-# ==============================================================================
-# SCREEN 1: MASTER EV TABLES
-# ==============================================================================
-if app_mode == "📋 Master EV Tables":
-    st.title("📋 Master EV Tables & Projections")
-
-    col1, col2, col3 = st.columns([1, 1, 2])
-    with col1:
-        pos_choice = st.selectbox("🏈 Position:", ["All Positions", "QB", "RB", "WR", "TE"])
-    with col2:
-        action_choice = st.selectbox("⭐ Action:", ["All Actions", "MAX BET", "ANCHOR", "STRONG BET", "BOOSTER", "FLYER"])
-    with col3:
-        search = st.text_input("🔍 Search Player or Team:", "")
-
-    tab_names = [s for s in excel_data.sheet_names if s != "How To Use"]
-    tabs = st.tabs(tab_names)
-
-    for i, sheet_name in enumerate(tab_names):
-        with tabs[i]:
-            df = pd.read_excel(excel_data, sheet_name=sheet_name)
-            if df.empty:
-                st.info("No data in this sheet.")
-                continue
-
-            for col in df.columns:
-                if "EV" in col or "Market EV" in col:
-                    df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=True))
-                elif any(w in col for w in ["Prob", "Probability", "Win Prob"]):
-                    df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=False))
-
-            pos_col = next((c for c in ["Pos", "Position"] if c in df.columns), None)
-            if pos_col and pos_choice != "All Positions":
-                df = df[df[pos_col].astype(str).str.contains(pos_choice, case=False, na=False)]
-
-            if "Action" in df.columns and action_choice != "All Actions":
-                df = df[df["Action"].astype(str).str.contains(action_choice, case=False, na=False)]
-
-            if search:
-                mask = df.astype(str).apply(lambda row: row.str.contains(search, case=False).any(), axis=1)
-                df = df[mask]
-
-            def highlight_actions(row):
-                val = str(row.get("Action", ""))
-                if "MAX" in val: return ["background-color: #e8d7ff"] * len(row)
-                elif "ANCHOR" in val: return ["background-color: #fff2cc"] * len(row)
-                elif "STRONG" in val: return ["background-color: #d4edda"] * len(row)
-                elif "SKIP" in val: return ["background-color: #f8d7da"] * len(row)
-                return [""] * len(row)
-
-            st.dataframe(df.style.apply(highlight_actions, axis=1), use_container_width=True, height=550)
+# Number Formatter (Cleans 4.500000 -> 4.5)
+def format_clean_decimal(val):
+    if pd.isna(val) or val == "-" or not isinstance(val, (int, float)):
+        return val
+    f_val = float(val)
+    if f_val.is_integer():
+        return f"{int(f_val)}"
+    return f"{f_val:.1f}"
 
 # ==============================================================================
-# SCREEN 2: PRO BETTING VISUALIZER (WORKING HEADSHOTS & SPACED BARS)
+# SCREEN 1: PRO BETTING VISUALIZER (DEFAULT / FIRST)
 # ==============================================================================
-elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
+if app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
     st.title("📊 Pro Betting Visualizer")
 
     all_player_rows = []
@@ -264,7 +220,7 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
         team_tag = player_props["Team"].iloc[0] if not player_props.empty else ""
 
         with st.container(border=True):
-            # Real Headshot Display
+            # Headshot
             headshot_url = get_headshot_url(player)
             h_col1, h_col2 = st.columns([1, 7])
             with h_col1:
@@ -276,7 +232,7 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
                 st.markdown(f"## {player}")
                 st.caption(f"**Team:** {team_tag} | Props Posted: {len(player_props)}")
 
-            # Scorecards
+            # Scorecards with clean 4.5 numbers (No trailing zeros)
             cols_per_row = 3
             for i in range(0, len(player_props), cols_per_row):
                 batch = player_props.iloc[i:i + cols_per_row]
@@ -287,8 +243,8 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
                             st.markdown(f"#### 📌 {r['Prop Name']} `[{r['Book']}]`")
                             st.markdown(f"**Pick:** `{r['Pick']}` | **Action:** `{r['Action']}`")
                             m1, m2 = st.columns(2)
-                            m1.metric("Vegas Line", f"{r['Vegas Line']}")
-                            m2.metric("Model Proj", f"{r['Model Projection']}", delta=f"{r['Margin']:+0.1f}")
+                            m1.metric("Vegas Line", format_clean_decimal(r['Vegas Line']))
+                            m2.metric("Model Proj", format_clean_decimal(r['Model Projection']), delta=f"{r['Margin']:+0.1f}")
                             m3, m4 = st.columns(2)
                             m3.metric("Win Prob", r['Win Prob'])
                             m4.metric("EV Edge", r['EV'])
@@ -385,7 +341,7 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
                         total = len(t_df)
                         hit_pct = round((hits / total) * 100)
 
-                        st.markdown(f"**📌 {target_prop_name} `[{book_tag}]` — Line: `{cur_line}` | Hit Rate: `{hits}/{total} ({hit_pct}%)`**")
+                        st.markdown(f"**📌 {target_prop_name} `[{book_tag}]` — Line: `{format_clean_decimal(cur_line)}` | Hit Rate: `{hits}/{total} ({hit_pct}%)`**")
 
                         hit_bars = alt.Chart(t_df).mark_bar(size=26, cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
                             x=alt.X("Game:N", title="Recent Games (Oldest ➔ Latest)", sort=None),
@@ -412,3 +368,61 @@ elif app_mode == "📊 Pro Betting Visualizer (Hit Rates & Edge)":
 
             if not has_any_l5:
                 st.caption("ℹ️ *Last 5 game stats will appear here once you run the updated Script 3 in Colab and push the new slate file.*")
+
+# ==============================================================================
+# SCREEN 2: MASTER EV TABLES (SHRUNK HEIGHT & CLEAN NUMBERS)
+# ==============================================================================
+elif app_mode == "📋 Master EV Tables":
+    st.title("📋 Master EV Tables & Projections")
+
+    col1, col2, col3 = st.columns([1, 1, 2])
+    with col1:
+        pos_choice = st.selectbox("🏈 Position:", ["All Positions", "QB", "RB", "WR", "TE"])
+    with col2:
+        action_choice = st.selectbox("⭐ Action:", ["All Actions", "MAX BET", "ANCHOR", "STRONG BET", "BOOSTER", "FLYER"])
+    with col3:
+        search = st.text_input("🔍 Search Player or Team:", "")
+
+    tab_names = [s for s in excel_data.sheet_names if s != "How To Use"]
+    tabs = st.tabs(tab_names)
+
+    for i, sheet_name in enumerate(tab_names):
+        with tabs[i]:
+            df = pd.read_excel(excel_data, sheet_name=sheet_name)
+            if df.empty:
+                st.info("No data in this sheet.")
+                continue
+
+            # Clean decimals and percentages
+            for col in df.columns:
+                if "EV" in col or "Market EV" in col:
+                    df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=True))
+                elif any(w in col for w in ["Prob", "Probability", "Win Prob"]):
+                    df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=False))
+                elif any(w in col for w in ["Line", "Projection", "Calibrated Proj"]):
+                    df[col] = df[col].apply(format_clean_decimal)
+
+            # Drop unnecessary internal sorting columns
+            df = df.drop(columns=[c for c in ["GameSortKey", "SortScore", "CleanName"] if c in df.columns])
+
+            pos_col = next((c for c in ["Pos", "Position"] if c in df.columns), None)
+            if pos_col and pos_choice != "All Positions":
+                df = df[df[pos_col].astype(str).str.contains(pos_choice, case=False, na=False)]
+
+            if "Action" in df.columns and action_choice != "All Actions":
+                df = df[df["Action"].astype(str).str.contains(action_choice, case=False, na=False)]
+
+            if search:
+                mask = df.astype(str).apply(lambda row: row.str.contains(search, case=False).any(), axis=1)
+                df = df[mask]
+
+            def highlight_actions(row):
+                val = str(row.get("Action", ""))
+                if "MAX" in val: return ["background-color: #e8d7ff"] * len(row)
+                elif "ANCHOR" in val: return ["background-color: #fff2cc"] * len(row)
+                elif "STRONG" in val: return ["background-color: #d4edda"] * len(row)
+                elif "SKIP" in val: return ["background-color: #f8d7da"] * len(row)
+                return [""] * len(row)
+
+            # Compact height (380px)
+            st.dataframe(df.style.apply(highlight_actions, axis=1), use_container_width=True, height=380)

@@ -20,7 +20,7 @@ st.sidebar.title("🏈 NFL Quant Engine")
 selected_file = st.sidebar.selectbox("📅 Select Slate:", files)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
-app_mode = st.sidebar.radio("📱 Screen:", ["📋 Master EV Tables", "📊 Player Prop Deep Dive"])
+app_mode = st.sidebar.radio("📱 Screen:", ["📋 Master EV Tables", "📊 Team & Player Prop Visualizer"])
 
 excel_data = pd.ExcelFile(file_path)
 
@@ -82,10 +82,10 @@ if app_mode == "📋 Master EV Tables":
             st.dataframe(df.style.apply(highlight_actions, axis=1), use_container_width=True, height=550)
 
 # ==============================================================================
-# SCREEN 2: ALL PROPS IN CONSOLIDATED CHARTS
+# SCREEN 2: TEAM & POSITION VISUALIZER (STACKED CHARTS)
 # ==============================================================================
-elif app_mode == "📊 Player Prop Deep Dive":
-    st.title("📊 Player Prop Analytics & Visuals")
+elif app_mode == "📊 Team & Player Prop Visualizer":
+    st.title("📊 Team & Position Prop Analytics")
 
     # Gather all player records across every sheet
     all_player_rows = []
@@ -104,16 +104,38 @@ elif app_mode == "📊 Player Prop Deep Dive":
         st.stop()
 
     combined_df = pd.concat(all_player_rows, ignore_index=True)
-    player_list = sorted(combined_df["Player"].dropna().unique())
 
-    selected_player = st.selectbox("👤 Select Player:", player_list)
-    p_data = combined_df[combined_df["Player"] == selected_player]
+    # Clean Team & Position columns
+    team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
+    pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
 
-    st.subheader(f"All Props & Projections for: {selected_player}")
+    # 1. TEAM & POSITION FILTERS
+    f_col1, f_col2, f_col3 = st.columns([1, 1, 1])
 
-    # Extract all betting lines for this player
+    with f_col1:
+        if team_col:
+            team_list = ["All Teams"] + sorted(combined_df[team_col].dropna().astype(str).unique().tolist())
+            selected_team = st.selectbox("🏈 Select Team:", team_list)
+        else:
+            selected_team = "All Teams"
+
+    with f_col2:
+        selected_pos = st.selectbox("🎯 Select Position:", ["All Positions", "QB", "RB", "WR", "TE"])
+
+    with f_col3:
+        market_type = st.selectbox("📊 Prop Type:", ["All Props", "Yards Only", "Counts/Volume Only"])
+
+    # Filter data by Team and Position
+    filtered_df = combined_df.copy()
+    if team_col and selected_team != "All Teams":
+        filtered_df = filtered_df[filtered_df[team_col].astype(str) == selected_team]
+
+    if pos_col and selected_pos != "All Positions":
+        filtered_df = filtered_df[filtered_df[pos_col].astype(str).str.contains(selected_pos, case=False, na=False)]
+
+    # Extract all betting lines
     prop_rows = []
-    for _, r in p_data.iterrows():
+    for _, r in filtered_df.iterrows():
         p_name = r.get("Prop") or r.get("Milestone (Alt Line)")
         line = r.get("Line")
         proj = r.get("Projection")
@@ -122,20 +144,23 @@ elif app_mode == "📊 Player Prop Deep Dive":
             try:
                 line_f = float(line)
                 proj_f = float(proj)
+                player_name = str(r["Player"])
+                team_name = str(r.get(team_col, ""))
                 book = str(r.get("Book", r.get("Source Sheet", "")))
                 side = str(r.get("Side", "Over"))
                 ev = r.get("EV", "-")
                 prob = r.get("Model Win Prob", "-")
                 act = str(r.get("Action", "-"))
 
-                label = f"{p_name} ({book})"
                 prop_rows.append({
-                    "Prop Label": label,
+                    "Player": player_name,
+                    "Team": team_name,
+                    "Prop Label": f"{player_name} — {p_name} ({book})",
                     "Prop Name": str(p_name),
                     "Vegas Line": line_f,
                     "Model Projection": proj_f,
                     "Pick": side,
-                    "Edge / Margin": round(proj_f - line_f, 1),
+                    "Margin": round(proj_f - line_f, 1),
                     "EV": format_percentage(ev, is_ev=True),
                     "Win Prob": format_percentage(prob),
                     "Action": act
@@ -143,42 +168,67 @@ elif app_mode == "📊 Player Prop Deep Dive":
             except:
                 pass
 
-    if prop_rows:
-        props_df = pd.DataFrame(prop_rows).drop_duplicates(subset=["Prop Label"])
+    if not prop_rows:
+        st.info("No betting props found matching this Team & Position filter.")
+        st.stop()
 
-        # Split into Yardage vs Counts for clean chart scaling
-        yards_mask = props_df["Prop Name"].str.contains("Yds|Yards", case=False, na=False)
-        yards_df = props_df[yards_mask]
-        counts_df = props_df[~yards_mask]
+    props_df = pd.DataFrame(prop_rows).drop_duplicates(subset=["Prop Label"])
 
-        # 1. YARDAGE PROPS (PASS / RUSH / REC YDS)
-        if not yards_df.empty:
-            st.markdown("### 📈 Yardage Props (Line vs. Projection)")
-            chart_y = yards_df.set_index("Prop Label")[["Vegas Line", "Model Projection"]]
-            st.bar_chart(chart_y)
+    # Filter Market Type
+    if market_type == "Yards Only":
+        props_df = props_df[props_df["Prop Name"].str.contains("Yds|Yards", case=False, na=False)]
+    elif market_type == "Counts/Volume Only":
+        props_df = props_df[~props_df["Prop Name"].str.contains("Yds|Yards", case=False, na=False)]
 
-        # 2. COUNT / VOLUME PROPS (ATTEMPTS / RECEPTIONS / CARRIES)
-        if not counts_df.empty:
-            st.markdown("### 🎯 Volume & Counts Props (Line vs. Projection)")
-            chart_c = counts_df.set_index("Prop Label")[["Vegas Line", "Model Projection"]]
-            st.bar_chart(chart_c)
+    if props_df.empty:
+        st.info("No props matching the selected Prop Type.")
+        st.stop()
 
-        # 3. SCORECARD SUMMARY TABLE
-        st.markdown("### 📋 Prop Scorecard Table")
-        table_cols = ["Prop Label", "Pick", "Vegas Line", "Model Projection", "Edge / Margin", "Win Prob", "EV", "Action"]
-        st.dataframe(props_df[table_cols], use_container_width=True)
+    # --------------------------------------------------------------------------
+    # 2. ALL-PLAYER MACRO COMPARISON CHART
+    # --------------------------------------------------------------------------
+    st.markdown(f"### 📈 All Players Comparison: {selected_team} ({selected_pos})")
+    st.caption("Grey = Vegas Line | Green = Model Projection")
 
-    else:
-        # Fallback: Raw projections if no betting lines exist
-        raw_preds = {}
-        for _, r in p_data.iterrows():
-            for c in r.index:
-                if "Predicted" in str(c) and pd.notna(r[c]) and isinstance(r[c], (int, float)):
-                    raw_preds[str(c).replace("Predicted ", "")] = float(r[c])
+    macro_chart_df = props_df.set_index("Prop Label")[["Vegas Line", "Model Projection"]]
+    st.bar_chart(macro_chart_df, stack=False, color=["#4A5568", "#28A745"], height=400)
 
-        if raw_preds:
-            st.markdown("### 📋 Model Projections Overview")
-            chart_df = pd.DataFrame(list(raw_preds.items()), columns=["Stat", "Projected Value"]).set_index("Stat")
-            st.bar_chart(chart_df)
-        else:
-            st.info("No active lines or projections found for this player.")
+    st.divider()
+
+    # --------------------------------------------------------------------------
+    # 3. STACKED INDIVIDUAL PLAYER BREAKDOWNS (DOWN THE PAGE)
+    # --------------------------------------------------------------------------
+    st.markdown("### 🏆 Stacked Player Breakdowns")
+
+    unique_players = sorted(props_df["Player"].unique())
+
+    for player in unique_players:
+        player_props = props_df[props_df["Player"] == player]
+        team_tag = player_props["Team"].iloc[0] if not player_props.empty else ""
+
+        with st.container(border=True):
+            st.markdown(f"## 👤 {player} ({team_tag})")
+
+            # Scorecards in rows of 3
+            cols_per_row = 3
+            for i in range(0, len(player_props), cols_per_row):
+                batch = player_props.iloc[i:i + cols_per_row]
+                cols = st.columns(len(batch))
+                for c_idx, (_, r) in enumerate(batch.iterrows()):
+                    with cols[c_idx]:
+                        with st.container(border=True):
+                            st.markdown(f"**📌 {r['Prop Name']}**")
+                            st.markdown(f"**Pick:** `{r['Pick']}` | **Action:** `{r['Action']}`")
+                            
+                            m1, m2 = st.columns(2)
+                            m1.metric("Vegas Line", f"{r['Vegas Line']}")
+                            m2.metric("Model Proj", f"{r['Model Projection']}", delta=f"{r['Margin']:+0.1f}")
+                            
+                            m3, m4 = st.columns(2)
+                            m3.metric("Win Prob", r['Win Prob'])
+                            m4.metric("EV Edge", r['EV'])
+
+            # Side-by-side bar chart for this individual player
+            st.markdown(f"**{player} — Vegas Line vs. Model Projection:**")
+            p_chart = player_props.set_index("Prop Label")[["Vegas Line", "Model Projection"]]
+            st.bar_chart(p_chart, stack=False, color=["#4A5568", "#28A745"], height=250)

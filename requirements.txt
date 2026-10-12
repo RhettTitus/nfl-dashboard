@@ -1,1 +1,3 @@
-install: streamlit, pandas, openpyxl
+streamlit
+pandas
+openpyxl

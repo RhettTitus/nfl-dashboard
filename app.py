@@ -7,19 +7,38 @@ import altair as alt
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
+# --------------------------------------------------------------------------
+# GLOBAL CSS GUARD (BIG MOBILE CHECKBOXES & ZERO TRUNCATION)
+# --------------------------------------------------------------------------
 st.markdown("""
 <style>
+/* Enlarged, Mobile-Friendly Touch Targets for Checkboxes */
+div[data-testid="stCheckbox"] {
+    background: #F8FAFC;
+    border: 1px solid #CBD5E1;
+    border-radius: 6px;
+    padding: 6px 10px !important;
+    margin-top: 6px !important;
+}
+div[data-testid="stCheckbox"] label span:first-child {
+    width: 24px !important;
+    height: 24px !important;
+    margin-right: 8px !important;
+}
+div[data-testid="stCheckbox"] label p {
+    font-size: 1.0rem !important;
+    font-weight: 700 !important;
+    color: #0F172A !important;
+}
 [data-testid="stMetricValue"] {
-    font-size: 1.30rem !important;
+    font-size: 1.25rem !important;
     white-space: normal !important;
     overflow: visible !important;
-    text-overflow: unset !important;
 }
 [data-testid="stMetricLabel"] {
-    font-size: 0.85rem !important;
+    font-size: 0.80rem !important;
     white-space: normal !important;
     overflow: visible !important;
-    text-overflow: unset !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -27,6 +46,9 @@ st.markdown("""
 DATA_FOLDER = "./data"
 os.makedirs(DATA_FOLDER, exist_ok=True)
 
+# --------------------------------------------------------------------------
+# 1. SMART DATE-BASED FILE DETECTOR
+# --------------------------------------------------------------------------
 def parse_slate_date(filename):
     m = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{2,4})\.xlsx$", filename)
     if m:
@@ -53,6 +75,9 @@ if not dated_files:
 dated_files.sort(key=lambda x: x["date"], reverse=True)
 latest_file = dated_files[0]["filename"]
 
+# --------------------------------------------------------------------------
+# 2. VERIFIED NFL HEADSHOT DATABASE
+# --------------------------------------------------------------------------
 def clean_player_name(name):
     n = re.sub(r"\b(jr.?|sr.?|iii|ii|iv)\b", "", str(name), flags=re.IGNORECASE)
     return re.sub(r"[^\w\s]", "", n).lower().strip()
@@ -128,7 +153,7 @@ def format_american_odds(val):
 
 def get_best_line_badge_html(line_adv_note):
     if line_adv_note:
-        return f'<span style="background-color:#FEF3C7; color:#92400E; padding:3px 9px; border-radius:12px; font-weight:bold; font-size:11px; border:1px solid #F59E0B; white-space:nowrap; display:inline-block; flex-shrink:0;">{line_adv_note}</span>'
+        return f'<span style="background-color:#FEF3C7; color:#92400E; padding:2px 8px; border-radius:10px; font-weight:bold; font-size:10px; border:1px solid #F59E0B; white-space:nowrap; display:inline-block;">{line_adv_note}</span>'
     return ""
 
 def extract_sanitized_prop_and_line(r):
@@ -187,6 +212,9 @@ def get_or_calculate_book_prob(book_prob_raw, odds_raw):
             pass
     return None
 
+# --------------------------------------------------------------------------
+# SIDEBAR NAVIGATION
+# --------------------------------------------------------------------------
 st.sidebar.title("🏈 NFL Quant Engine")
 file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate (Defaults to Latest):", file_names, index=0)
@@ -262,37 +290,128 @@ def tag_best_line_advantages(df):
 
     return df
 
-def render_gambly_copy_box(df, box_title="📋 Gambly / Tracker Copy Slip"):
-    with st.expander(box_title, expanded=False):
-        c_book = st.selectbox(
-            "Select Sportsbook for Copy Slip:",
-            ["DraftKings", "FanDuel", "All Books (Combined)"],
-            key=f"cb_{box_title}"
-        )
-        
-        slip_df = df.copy()
-        if c_book != "All Books (Combined)":
-            slip_df = slip_df[slip_df["Book"] == c_book]
-            
-        slip_lines = []
-        for _, r in slip_df.iterrows():
-            p = str(r["Player"]).strip()
-            side = str(r["Pick"]).strip()
-            line = format_clean_decimal(r["Vegas Line"])
-            prop = str(r["Prop Name"]).strip()
-            
-            bet_str = format_gambly_bet_string(p, side, line, prop)
-            if bet_str and "nan" not in bet_str.lower():
-                slip_lines.append(bet_str)
-                
-        slip_lines = list(dict.fromkeys(slip_lines))
-        
-        if slip_lines:
-            st.caption(f"Showing **{len(slip_lines)}** {c_book} bets (Click icon in top-right to copy):")
-            st.code("\n".join(slip_lines), language="text")
-        else:
-            st.info(f"No bets available for {c_book} under current filters.")
+# Compact Box Renderer with Checkbox for Tap-to-Add
+def render_compact_book_box(r, chk_key):
+    book_html = get_book_styled(r["Book"])
+    star_badge = get_best_line_badge_html(r["Line_Adv_Note"])
+    action_text = r["Action"]
+    
+    is_max = "MAX" in action_text
+    is_strong = "STRONG" in action_text
+    action_color = "#6B21A8" if is_max else ("#166534" if is_strong else "#334155")
+    action_bg = "#F3E8FF" if is_max else ("#DCFCE7" if is_strong else "#F1F5F9")
+    
+    margin_val = r["Margin"]
+    is_pos = margin_val >= 0
+    margin_arrow = "▲" if is_pos else "▼"
+    margin_bg = "#F0FDF4" if is_pos else "#FEF2F2"
+    margin_border = "#BBF7D0" if is_pos else "#FECACA"
+    margin_color = "#15803D" if is_pos else "#B91C1C"
 
+    odds_str = f"({r['Odds']})" if r['Odds'] != "-" else ""
+    prob_delta_str = f"({r['Prob Delta']})" if r['Prob Delta'] else ""
+
+    card_html = f"""
+    <div style="background:#FFFFFF; border:1px solid #E2E8F0; border-radius:8px; padding:10px 14px; margin-bottom:4px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div style="display:flex; align-items:center;">
+                {book_html} {star_badge}
+            </div>
+            <span style="font-size:10px; font-weight:700; color:{action_color}; background:{action_bg}; padding:2px 7px; border-radius:4px;">
+                {action_text}
+            </span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">
+            <span style="font-size:1.15rem; font-weight:800; color:#0F172A;">
+                {r['Pick']} {format_clean_decimal(r['Vegas Line'])} <span style="font-size:0.85rem; font-weight:600; color:#64748B;">{odds_str}</span>
+            </span>
+            <span style="font-size:1.15rem; font-weight:800; color:#10B981;">
+                {r['EV']} EV
+            </span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:0.80rem; color:#475569; margin-bottom:7px;">
+            <span>Model: <b>{r['Win Prob']}</b></span>
+            <span>Book: <b>{r['Book Win Prob']}</b> <span style="color:#10B981; font-weight:700;">{prob_delta_str}</span></span>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; background:{margin_bg}; border:1px solid {margin_border}; border-radius:5px; padding:3px 8px;">
+            <span style="font-size:11px; font-weight:600; color:{margin_color};">Margin vs Line:</span>
+            <span style="font-size:11.5px; font-weight:800; color:{margin_color};">
+                {margin_arrow} {margin_val:+0.1f} (Proj: {format_clean_decimal(r['Model Projection'])})
+            </span>
+        </div>
+    </div>
+    """
+    st.markdown(card_html, unsafe_allow_html=True)
+    # Checkbox with large mobile touch area
+    st.checkbox("➕ Add to Slip", key=chk_key)
+
+# Render Hit Rate Chart Directly for a Prop
+def render_prop_hit_rate_chart(base_prop_name, grp):
+    last_5_raw = ""
+    for _, r_cand in grp.iterrows():
+        l5_c = str(r_cand.get("Last 5", "")).strip()
+        if l5_c and l5_c not in ["-", "nan", ""]:
+            last_5_raw = l5_c
+            break
+
+    if last_5_raw:
+        try:
+            stats_list = [float(x.strip()) for x in last_5_raw.split(",") if x.strip()]
+        except:
+            stats_list = []
+
+        if stats_list:
+            total_g = len(stats_list)
+            chronological_labels = []
+            trend_points = []
+            for idx, val in enumerate(stats_list):
+                label = f"G{idx + 1}" if (idx + 1) < total_g else f"G{idx + 1} (Latest)"
+                chronological_labels.append(label)
+                trend_points.append({"Game": label, "Value": val})
+
+            t_df = pd.DataFrame(trend_points)
+
+            book_badges_summary = []
+            for _, b_row in grp.iterrows():
+                b_html = get_book_styled(b_row["Book"])
+                cur_line = b_row["Vegas Line"]
+                hits = sum(t_df["Value"] >= cur_line)
+                hit_pct = round((hits / total_g) * 100)
+                star_b = f" {b_row['Line_Adv_Note']}" if b_row["Line_Adv_Note"] else ""
+                book_badges_summary.append(f"[{b_html}]{star_b} Line `{format_clean_decimal(cur_line)}` ({hits}/{total_g} — {hit_pct}%)")
+
+            st.caption("📈 **Historical Trend:** " + " | ".join(book_badges_summary))
+
+            primary_line = grp["Vegas Line"].iloc[0]
+            t_df["Result"] = t_df["Value"].apply(lambda v: "Over Hit" if v >= primary_line else "Under Miss")
+            y_max = max(max(t_df["Value"]), grp["Vegas Line"].max()) * 1.30
+
+            hit_bars = alt.Chart(t_df).mark_bar(size=26, cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
+                x=alt.X("Game:N", title="Chronological Game Log (Oldest ➔ Latest)", sort=chronological_labels, axis=alt.Axis(labelLimit=0)),
+                y=alt.Y("Value:Q", title="Stat Value", scale=alt.Scale(domain=[0, y_max])),
+                color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#10B981", "#EF4444"]), legend=alt.Legend(title=None, orient="top"))
+            )
+
+            bar_text = alt.Chart(t_df).mark_text(dy=-10, fontSize=11, fontWeight="bold").encode(
+                x=alt.X("Game:N", sort=chronological_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f")
+            )
+
+            ref_lines = []
+            for _, b_row in grp.iterrows():
+                c_line = b_row["Vegas Line"]
+                l_color = "#52B034" if "draftkings" in str(b_row["Book"]).lower() else "#1493FF"
+                ref_line = alt.Chart(pd.DataFrame({"y": [c_line]})).mark_rule(
+                    color=l_color, strokeWidth=2, strokeDash=[4, 4]
+                ).encode(y="y:Q")
+                ref_lines.append(ref_line)
+
+            combined_chart = hit_bars + bar_text
+            for r_line in ref_lines:
+                combined_chart += r_line
+
+            st.altair_chart(combined_chart.properties(height=200), use_container_width=True)
+
+# Common Render Function for Visualizers
 def render_prop_visualizer(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
@@ -394,7 +513,49 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         st.info("No props available under this filter.")
         return
 
-    render_gambly_copy_box(props_df, box_title="📋 Gambly Copy Slip (Clean Format by Sportsbook)")
+    # --------------------------------------------------------------------------
+    # INTERACTIVE TAP-TO-ADD GAMBLY SLIPS (STARTS BLANK, BUILDS SEPARATE SHEETS)
+    # --------------------------------------------------------------------------
+    selected_dk_bets = []
+    selected_fd_bets = []
+
+    for _, r_check in props_df.iterrows():
+        chk_id = f"chk_{r_check['Player']}_{r_check['Book']}_{r_check['Prop Name']}_{format_clean_decimal(r_check['Vegas Line'])}"
+        if st.session_state.get(chk_id, False):
+            bet_line = format_gambly_bet_string(r_check['Player'], r_check['Pick'], r_check['Vegas Line'], r_check['Prop Name'])
+            if r_check['Book'] == 'DraftKings':
+                selected_dk_bets.append(bet_line)
+            elif r_check['Book'] == 'FanDuel':
+                selected_fd_bets.append(bet_line)
+
+    selected_dk_bets = list(dict.fromkeys(selected_dk_bets))
+    selected_fd_bets = list(dict.fromkeys(selected_fd_bets))
+
+    with st.expander("📋 Interactive Gambly Slips (Tap '➕ Add to Slip' on Props Below)", expanded=(len(selected_dk_bets) > 0 or len(selected_fd_bets) > 0)):
+        col_clear, _ = st.columns([1, 4])
+        with col_clear:
+            if st.button("🗑️ Clear Selected Slips", key=f"clr_slips_{is_alt_mode}"):
+                for k in list(st.session_state.keys()):
+                    if k.startswith("chk_"):
+                        st.session_state[k] = False
+                st.rerun()
+
+        col_dk_slip, col_fd_slip = st.columns(2)
+        with col_dk_slip:
+            st.markdown("### 🟢 DraftKings Slip")
+            if selected_dk_bets:
+                st.caption(f"**{len(selected_dk_bets)}** bets selected (Click copy icon):")
+                st.code("\n".join(selected_dk_bets), language="text")
+            else:
+                st.caption("No DraftKings bets selected yet. Check boxes below to add.")
+
+        with col_fd_slip:
+            st.markdown("### 🔵 FanDuel Slip")
+            if selected_fd_bets:
+                st.caption(f"**{len(selected_fd_bets)}** bets selected (Click copy icon):")
+                st.code("\n".join(selected_fd_bets), language="text")
+            else:
+                st.caption("No FanDuel bets selected yet. Check boxes below to add.")
 
     unique_players = sorted(props_df["Player"].unique())
 
@@ -408,153 +569,54 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             headshot_url = get_headshot_url(player)
             h_col1, h_col2 = st.columns([1, 7])
             with h_col1:
-                if headshot_url: st.image(headshot_url, width=95)
+                if headshot_url: st.image(headshot_url, width=90)
                 else: st.markdown("## 👤")
             with h_col2:
                 st.markdown(f"## {player} — {team_tag} **{player_depth_label}**")
-                st.caption(f"Props Available: {len(p_props)}")
-
-            cols_per_row = 2
-            for i in range(0, len(p_props), cols_per_row):
-                batch = p_props.iloc[i:i + cols_per_row]
-                cols = st.columns(len(batch))
-                for c_idx, (_, r) in enumerate(batch.iterrows()):
-                    with cols[c_idx]:
-                        with st.container(border=True):
-                            b_html = get_book_styled(r['Book'])
-                            star_badge = get_best_line_badge_html(r['Line_Adv_Note'])
-                            
-                            card_title_html = f"""
-                            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px;">
-                                <div style="font-size:1.10rem; font-weight:700; color:#0F172A; line-height:1.3;">
-                                    📌 {r['Prop Name']} [{b_html}]
-                                </div>
-                                <div style="flex-shrink:0;">
-                                    {star_badge}
-                                </div>
-                            </div>
-                            """
-                            st.markdown(card_title_html, unsafe_allow_html=True)
-                            st.markdown(f"**Pick:** `{r['Pick']}` | **Action:** `{r['Action']}`")
-                            
-                            m1, m2, m3 = st.columns(3)
-                            odds_display = f" ({r['Odds']})" if r['Odds'] != "-" else ""
-                            m1.metric("Line & Odds", f"{format_clean_decimal(r['Vegas Line'])}{odds_display}")
-                            m2.metric("Model Proj", format_clean_decimal(r['Model Projection']), delta=f"{r['Margin']:+0.1f}")
-                            m3.metric("EV Edge", r['EV'])
-                            
-                            m4, m5 = st.columns(2)
-                            m4.metric("Book Win Prob", r['Book Win Prob'])
-                            m5.metric("Model Win Prob", r['Win Prob'], delta=r['Prob Delta'])
-
-            st.markdown("#### ⚡ Model Edge / Margin vs. Vegas Line")
-            
-            edge_df = p_props.groupby("Prop Label", as_index=False).first().copy()
-            edge_df["Chart_Label"] = edge_df.apply(lambda row: f"⭐ {row['Prop Label']}" if row['Is_Best_Line'] else row['Prop Label'], axis=1)
-            edge_df["Edge Color"] = edge_df["Margin"].apply(lambda m: "Over Edge" if m >= 0 else "Under Edge")
-
-            max_m = max(abs(edge_df["Margin"].max()), abs(edge_df["Margin"].min()), 1.0)
-            x_domain = [-max_m * 1.45, max_m * 1.45]
-
-            bars_edge = alt.Chart(edge_df).mark_bar(
-                size=16, cornerRadiusTopRight=4, cornerRadiusBottomRight=4, cornerRadiusTopLeft=4, cornerRadiusBottomLeft=4
-            ).encode(
-                y=alt.Y(
-                    "Chart_Label:N", 
-                    title=None, 
-                    sort="-x", 
-                    scale=alt.Scale(paddingInner=0.55, paddingOuter=0.35), 
-                    axis=alt.Axis(offset=15, labelPadding=12, labelLimit=0)
-                ),
-                x=alt.X("Margin:Q", title="Model Advantage (Margin vs. Line)", scale=alt.Scale(domain=x_domain)),
-                color=alt.Color("Edge Color:N", scale=alt.Scale(domain=["Over Edge", "Under Edge"], range=["#10B981", "#EF4444"]), legend=alt.Legend(title=None, orient="top"))
-            )
-
-            text_edge = alt.Chart(edge_df).mark_text(
-                align=alt.expr("datum.Margin >= 0 ? 'left' : 'right'"),
-                dx=alt.expr("datum.Margin >= 0 ? 8 : -8"),
-                fontSize=11, fontWeight="bold"
-            ).encode(y=alt.Y("Chart_Label:N", sort="-x"), x=alt.X("Margin:Q"), text=alt.Text("Margin:Q", format="+.1f"))
-
-            zero_line = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color="#4A5568", strokeDash=[3, 3]).encode(x="x:Q")
-            st.altair_chart((bars_edge + text_edge + zero_line).properties(height=alt.Step(42)), use_container_width=True)
-
-            st.markdown("#### 📈 Rolling Hit Rate & Game Trend (Last 5 Games — Chronological)")
+                st.caption(f"Active Props Available: {len(p_props)}")
 
             grouped_props = p_props.groupby("Prop Name")
-            has_l5 = False
 
-            for base_prop_name, grp in grouped_props:
-                last_5_raw = ""
-                for _, r_cand in grp.iterrows():
-                    l5_c = str(r_cand.get("Last 5", "")).strip()
-                    if l5_c and l5_c not in ["-", "nan", ""]:
-                        last_5_raw = l5_c
-                        break
+            for prop_name, p_group in grouped_props:
+                dk_row = p_group[p_group["Book"] == "DraftKings"]
+                fd_row = p_group[p_group["Book"] == "FanDuel"]
+                proj_val = format_clean_decimal(p_group["Model Projection"].iloc[0])
 
-                if last_5_raw:
-                    try:
-                        stats_list = [float(x.strip()) for x in last_5_raw.split(",") if x.strip()]
-                    except:
-                        stats_list = []
+                st.markdown(f"**📌 {prop_name}** *(Model Projection: {proj_val})*")
 
-                    if stats_list:
-                        has_l5 = True
-                        total_g = len(stats_list)
+                col_dk, col_fd = st.columns(2)
 
-                        chronological_labels = []
-                        trend_points = []
-                        for idx, val in enumerate(stats_list):
-                            label = f"G{idx + 1}" if (idx + 1) < total_g else f"G{idx + 1} (Latest)"
-                            chronological_labels.append(label)
-                            trend_points.append({"Game": label, "Value": val})
+                with col_dk:
+                    if not dk_row.empty:
+                        r_dk = dk_row.iloc[0]
+                        chk_key_dk = f"chk_{r_dk['Player']}_{r_dk['Book']}_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}"
+                        render_compact_book_box(r_dk, chk_key_dk)
+                    else:
+                        st.markdown("""
+                        <div style="background:#F8FAFC; border:1px dashed #CBD5E1; border-radius:8px; padding:12px; text-align:center; color:#94A3B8; font-size:12px; margin-bottom:8px;">
+                            <span style="color:#52B034; font-weight:bold;">DraftKings</span>: No Line Posted
+                        </div>
+                        """, unsafe_allow_html=True)
 
-                        t_df = pd.DataFrame(trend_points)
+                with col_fd:
+                    if not fd_row.empty:
+                        r_fd = fd_row.iloc[0]
+                        chk_key_fd = f"chk_{r_fd['Player']}_{r_fd['Book']}_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}"
+                        render_compact_book_box(r_fd, chk_key_fd)
+                    else:
+                        st.markdown("""
+                        <div style="background:#F8FAFC; border:1px dashed #CBD5E1; border-radius:8px; padding:12px; text-align:center; color:#94A3B8; font-size:12px; margin-bottom:8px;">
+                            <span style="color:#1493FF; font-weight:bold;">FanDuel</span>: No Line Posted
+                        </div>
+                        """, unsafe_allow_html=True)
 
-                        book_badges_summary = []
-                        for _, b_row in grp.iterrows():
-                            b_html = get_book_styled(b_row["Book"])
-                            cur_line = b_row["Vegas Line"]
-                            hits = sum(t_df["Value"] >= cur_line)
-                            hit_pct = round((hits / total_g) * 100)
-                            star_b = f" {b_row['Line_Adv_Note']}" if b_row["Line_Adv_Note"] else ""
-                            book_badges_summary.append(f"[{b_html}]{star_b} Line `{format_clean_decimal(cur_line)}` ({hits}/{total_g} — {hit_pct}%)")
+                # ROLLING HIT RATE CHART DIRECTLY UNDERNEATH THIS SPECIFIC PROP
+                render_prop_hit_rate_chart(prop_name, p_group)
+                st.divider()
 
-                        st.markdown(f"**📌 {base_prop_name}:** " + " | ".join(book_badges_summary), unsafe_allow_html=True)
-
-                        primary_line = grp["Vegas Line"].iloc[0]
-                        t_df["Result"] = t_df["Value"].apply(lambda v: "Over Hit" if v >= primary_line else "Under Miss")
-
-                        y_max = max(max(t_df["Value"]), grp["Vegas Line"].max()) * 1.30
-
-                        hit_bars = alt.Chart(t_df).mark_bar(size=26, cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
-                            x=alt.X("Game:N", title="Chronological Game Log (Oldest ➔ Latest)", sort=chronological_labels, axis=alt.Axis(labelLimit=0)),
-                            y=alt.Y("Value:Q", title="Stat Value", scale=alt.Scale(domain=[0, y_max])),
-                            color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#10B981", "#EF4444"]), legend=alt.Legend(title=None, orient="top"))
-                        )
-
-                        bar_text = alt.Chart(t_df).mark_text(dy=-10, fontSize=11, fontWeight="bold").encode(
-                            x=alt.X("Game:N", sort=chronological_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f")
-                        )
-
-                        ref_lines = []
-                        for _, b_row in grp.iterrows():
-                            c_line = b_row["Vegas Line"]
-                            l_color = "#52B034" if "draftkings" in str(b_row["Book"]).lower() else "#1493FF"
-                            ref_line = alt.Chart(pd.DataFrame({"y": [c_line]})).mark_rule(
-                                color=l_color, strokeWidth=2, strokeDash=[4, 4]
-                            ).encode(y="y:Q")
-                            ref_lines.append(ref_line)
-
-                        combined_chart = hit_bars + bar_text
-                        for r_line in ref_lines:
-                            combined_chart += r_line
-
-                        st.altair_chart(combined_chart.properties(height=230), use_container_width=True)
-
-            if not has_l5:
-                st.caption("ℹ️ *Last 5 stats will appear once updated Script 3 is pushed.*")
-
+# ==============================================================================
+# SCREEN 1: PRO VISUALIZER (OVER / UNDER)
+# ==============================================================================
 if app_mode == "📊 Pro Visualizer: Over / Under":
     st.title("📊 Pro Visualizer: Over / Under")
     ou_df = load_visualizer_data(["Top DK OU", "Top FD OU"])
@@ -563,6 +625,9 @@ if app_mode == "📊 Pro Visualizer: Over / Under":
     else:
         render_prop_visualizer(ou_df, is_alt_mode=False)
 
+# ==============================================================================
+# SCREEN 2: PRO VISUALIZER (ALT LINES)
+# ==============================================================================
 elif app_mode == "⚡ Pro Visualizer: Alt Lines":
     st.title("⚡ Pro Visualizer: Alt Lines (Milestones & Parlays)")
     alt_df = load_visualizer_data(["Top DK Alt Lines", "Top FD Alt Lines"])
@@ -572,7 +637,7 @@ elif app_mode == "⚡ Pro Visualizer: Alt Lines":
         render_prop_visualizer(alt_df, is_alt_mode=True)
 
 # ==============================================================================
-# SCREEN 3: BEST OF THE BEST (WITH WIN PROBABILITY FILTER)
+# SCREEN 3: BEST OF THE BEST
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
     st.title("💎 Best of the Best (Top Conviction Plays)")
@@ -595,7 +660,6 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 ev_str = str(r_cand.get("EV", "-")).replace("%", "").strip()
                 ev_f = float(ev_str)
                 
-                # Extract clean probabilities
                 m_prob_raw = r_cand.get("Model Win Prob")
                 m_prob_f = float(str(m_prob_raw).replace("%", "").strip()) if pd.notna(m_prob_raw) else 0.50
                 m_prob_norm = m_prob_f if abs(m_prob_f) <= 1.0 else m_prob_f / 100.0
@@ -618,7 +682,6 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
 
         clean_curated_df = pd.DataFrame(sanitized_plays)
 
-        # PLAY STYLE TOGGLE (PROTECTS AGAINST LOW PROBABILITY TRAPS)
         c_mode = st.radio(
             "Filter Conviction Style:",
             [
@@ -629,7 +692,6 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
         )
 
         if "High Probability" in c_mode:
-            # Requires Model Win Prob >= 50% and Book Win Prob >= 40% (No longshot lottery tickets)
             best_plays = clean_curated_df[
                 (clean_curated_df["_model_prob"] >= 0.50) & 
                 (clean_curated_df["_book_prob"] >= 0.40) &
@@ -695,24 +757,32 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 model_prob = format_percentage(row.get("_model_prob"))
                 ev_clean = format_percentage(row.get("EV"), is_ev=True)
 
+                proj_val = float(row.get('Projection', 0))
+                line_f_val = float(row.get('Clean_Line', 0))
+                margin_val = round(proj_val - line_f_val, 1)
+                is_pos = margin_val >= 0
+                m_color = "#15803D" if is_pos else "#B91C1C"
+                m_bg = "#F0FDF4" if is_pos else "#FEF2F2"
+
                 with st.container(border=True):
-                    c1, c2, c3, c4, c5 = st.columns([1, 3, 2, 2, 2])
+                    c1, c2, c3, c4 = st.columns([1, 4, 3, 3])
                     with c1:
-                        if headshot_url: st.image(headshot_url, width=70)
+                        if headshot_url: st.image(headshot_url, width=65)
                         else: st.markdown("### 🏈")
                     with c2:
-                        st.markdown(f"### #{rank} {p_name}")
-                        st.markdown(f"**📌 {prop_n}** [{book_s}]", unsafe_allow_html=True)
-                    with c3:
-                        st.metric("Line & Odds", f"{side_clean} {line_display}{odds_str}")
-                        st.caption(f"Book Win Prob: **{book_prob}**")
-                    with c4:
-                        st.metric("Model Proj", format_clean_decimal(row.get('Projection')))
-                        st.caption(f"Model Win Prob: **{model_prob}**")
-                    with c5:
-                        st.metric("EV Edge", ev_clean)
+                        st.markdown(f"**#{rank} {p_name}**")
+                        st.markdown(f"📌 {prop_n} [{book_s}]", unsafe_allow_html=True)
                         st.caption(f"Action: `{row.get('Action', 'STRONG BET')}`")
+                    with c3:
+                        st.markdown(f"**{side_clean} {line_display}** <span style='color:#64748B;'>{odds_str}</span>", unsafe_allow_html=True)
+                        st.markdown(f"<span style='font-size:12px; font-weight:700; color:{m_color}; background:{m_bg}; padding:2px 6px; border-radius:4px;'>Margin: {margin_val:+0.1f}</span>", unsafe_allow_html=True)
+                    with c4:
+                        st.markdown(f"<span style='font-size:1.15rem; font-weight:800; color:#10B981;'>{ev_clean} EV</span>", unsafe_allow_html=True)
+                        st.caption(f"Win Prob: **{model_prob}** (Book: {book_prob})")
 
+# ==============================================================================
+# SCREEN 4: MASTER EV TABLES (WITH FULL TOP-LINE FILTERING)
+# ==============================================================================
 elif app_mode == "📋 Master EV Tables":
     st.title("📋 Master EV Tables & Projections")
 

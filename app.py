@@ -12,7 +12,6 @@ st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="�
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
-/* Enlarged, Mobile-Friendly Touch Targets for Checkboxes */
 div[data-testid="stCheckbox"] {
     background: #F8FAFC;
     border: 1px solid #CBD5E1;
@@ -374,7 +373,7 @@ def render_compact_book_box(r, chk_key):
     st.markdown(card_html, unsafe_allow_html=True)
     st.checkbox("➕ Add to Slip", key=chk_key)
 
-# Render Hit Rate Chart with Flat, Unrounded, Unoutlined Bars
+# Render Hit Rate Chart with Black Dotted Line & No X-Axis Title
 def render_prop_hit_rate_chart(base_prop_name, grp):
     last_5_raw = ""
     for _, r_cand in grp.iterrows():
@@ -400,6 +399,7 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
 
             t_df = pd.DataFrame(trend_points)
 
+            # Build Formatted Summary Line (Prop before Line, Bold Line, Highlighted Percentage)
             book_badges_summary = []
             for _, b_row in grp.iterrows():
                 b_html = get_book_styled(b_row["Book"])
@@ -407,19 +407,31 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
                 hits = sum(t_df["Value"] >= cur_line)
                 hit_pct = round((hits / total_g) * 100)
                 star_b = f" {b_row['Line_Adv_Note']}" if b_row["Line_Adv_Note"] else ""
-                book_badges_summary.append(f"[{b_html}]{star_b} Line `{format_clean_decimal(cur_line)}` ({hits}/{total_g} — {hit_pct}%)")
+                
+                # Highlight percentage if good (>= 75% green badge, <= 35% red badge)
+                if hit_pct >= 75:
+                    pct_html = f'<span style="background-color:#DCFCE7; color:#15803D; padding:2px 6px; border-radius:4px; font-weight:800;">{hit_pct}%</span>'
+                elif hit_pct <= 35:
+                    pct_html = f'<span style="background-color:#FEE2E2; color:#B91C1C; padding:2px 6px; border-radius:4px; font-weight:800;">{hit_pct}%</span>'
+                else:
+                    pct_html = f'<span style="font-weight:700; color:#334155;">{hit_pct}%</span>'
 
-            # Clean HTML render without leaking <span> code
+                # Format: [Book] Star Prop BoldLine (hits/total - highlighted_pct)
+                book_badges_summary.append(
+                    f"[{b_html}]{star_b} {base_prop_name} <b>{format_clean_decimal(cur_line)}</b> ({hits}/{total_g} — {pct_html})"
+                )
+
             summary_html = " | ".join(book_badges_summary)
-            st.markdown(f"<div style='font-size:0.88rem; color:#334155; margin-bottom:6px;'>📈 <b>Historical Trend:</b> {summary_html}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:0.88rem; color:#334155; margin-top:4px; margin-bottom:4px;'>📈 <b>Historical Trend:</b> {summary_html}</div>", unsafe_allow_html=True)
 
             primary_line = grp["Vegas Line"].iloc[0]
             t_df["Result"] = t_df["Value"].apply(lambda v: "Over Hit" if v >= primary_line else "Under Miss")
             y_max = max(max(t_df["Value"]), grp["Vegas Line"].max()) * 1.30
 
             # FLAT, UNROUNDED, UN-OUTLINED BARS (cornerRadius=0, strokeWidth=0)
+            # REMOVED X-AXIS TITLE (title=None)
             hit_bars = alt.Chart(t_df).mark_bar(size=26, cornerRadius=0, strokeWidth=0).encode(
-                x=alt.X("Game:N", title="Chronological Game Log (Oldest ➔ Latest)", sort=chronological_labels, axis=alt.Axis(labelLimit=0)),
+                x=alt.X("Game:N", title=None, sort=chronological_labels, axis=alt.Axis(labelLimit=0, labelFontWeight="bold")),
                 y=alt.Y("Value:Q", title="Stat Value", scale=alt.Scale(domain=[0, y_max])),
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#10B981", "#EF4444"]), legend=alt.Legend(title=None, orient="top"))
             )
@@ -428,12 +440,12 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
                 x=alt.X("Game:N", sort=chronological_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f")
             )
 
+            # BLACK DOTTED REFERENCE LINE (color="#000000", strokeDash=[2, 3])
             ref_lines = []
             for _, b_row in grp.iterrows():
                 c_line = b_row["Vegas Line"]
-                l_color = "#52B034" if "draftkings" in str(b_row["Book"]).lower() else "#1493FF"
                 ref_line = alt.Chart(pd.DataFrame({"y": [c_line]})).mark_rule(
-                    color=l_color, strokeWidth=2, strokeDash=[4, 4]
+                    color="#000000", strokeWidth=2, strokeDash=[2, 3]
                 ).encode(y="y:Q")
                 ref_lines.append(ref_line)
 
@@ -441,9 +453,10 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
             for r_line in ref_lines:
                 combined_chart += r_line
 
-            st.altair_chart(combined_chart.properties(height=200), use_container_width=True)
+            # TIGHTENED HEIGHT (175px)
+            st.altair_chart(combined_chart.properties(height=175), use_container_width=True)
 
-# Common Render Function for Visualizers
+# Common Render Function for Visualizers (With Prop Total Border Container)
 def render_prop_visualizer(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
@@ -546,7 +559,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         return
 
     # --------------------------------------------------------------------------
-    # INTERACTIVE TAP-TO-ADD GAMBLY SLIPS (STARTS BLANK, SEPARATE PER BOOK)
+    # INTERACTIVE TAP-TO-ADD GAMBLY SLIPS
     # --------------------------------------------------------------------------
     selected_dk_bets = []
     selected_fd_bets = []
@@ -610,41 +623,42 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             grouped_props = p_props.groupby("Prop Name")
 
             for prop_name, p_group in grouped_props:
-                dk_row = p_group[p_group["Book"] == "DraftKings"]
-                fd_row = p_group[p_group["Book"] == "FanDuel"]
-                proj_val = format_clean_decimal(p_group["Model Projection"].iloc[0])
+                # TOTAL BORDER AROUND EACH PROP SUMMARY
+                with st.container(border=True):
+                    dk_row = p_group[p_group["Book"] == "DraftKings"]
+                    fd_row = p_group[p_group["Book"] == "FanDuel"]
+                    proj_val = format_clean_decimal(p_group["Model Projection"].iloc[0])
 
-                st.markdown(f"**📌 {prop_name}** *(Model Projection: {proj_val})*")
+                    st.markdown(f"**📌 {prop_name}** *(Model Projection: {proj_val})*")
 
-                col_dk, col_fd = st.columns(2)
+                    col_dk, col_fd = st.columns(2)
 
-                with col_dk:
-                    if not dk_row.empty:
-                        r_dk = dk_row.iloc[0]
-                        chk_key_dk = f"chk_{r_dk['Player']}_{r_dk['Book']}_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}"
-                        render_compact_book_box(r_dk, chk_key_dk)
-                    else:
-                        st.markdown("""
-                        <div style="background:#F8FAFC; border:1px dashed #CBD5E1; border-radius:8px; padding:12px; text-align:center; color:#94A3B8; font-size:12px; margin-bottom:8px;">
-                            <span style="color:#52B034; font-weight:bold;">DraftKings</span>: No Line Posted
-                        </div>
-                        """, unsafe_allow_html=True)
+                    with col_dk:
+                        if not dk_row.empty:
+                            r_dk = dk_row.iloc[0]
+                            chk_key_dk = f"chk_{r_dk['Player']}_{r_dk['Book']}_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}"
+                            render_compact_book_box(r_dk, chk_key_dk)
+                        else:
+                            st.markdown("""
+                            <div style="background:#F8FAFC; border:1px dashed #CBD5E1; border-radius:8px; padding:12px; text-align:center; color:#94A3B8; font-size:12px; margin-bottom:8px;">
+                                <span style="color:#52B034; font-weight:bold;">DraftKings</span>: No Line Posted
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                with col_fd:
-                    if not fd_row.empty:
-                        r_fd = fd_row.iloc[0]
-                        chk_key_fd = f"chk_{r_fd['Player']}_{r_fd['Book']}_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}"
-                        render_compact_book_box(r_fd, chk_key_fd)
-                    else:
-                        st.markdown("""
-                        <div style="background:#F8FAFC; border:1px dashed #CBD5E1; border-radius:8px; padding:12px; text-align:center; color:#94A3B8; font-size:12px; margin-bottom:8px;">
-                            <span style="color:#1493FF; font-weight:bold;">FanDuel</span>: No Line Posted
-                        </div>
-                        """, unsafe_allow_html=True)
+                    with col_fd:
+                        if not fd_row.empty:
+                            r_fd = fd_row.iloc[0]
+                            chk_key_fd = f"chk_{r_fd['Player']}_{r_fd['Book']}_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}"
+                            render_compact_book_box(r_fd, chk_key_fd)
+                        else:
+                            st.markdown("""
+                            <div style="background:#F8FAFC; border:1px dashed #CBD5E1; border-radius:8px; padding:12px; text-align:center; color:#94A3B8; font-size:12px; margin-bottom:8px;">
+                                <span style="color:#1493FF; font-weight:bold;">FanDuel</span>: No Line Posted
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                # ROLLING HIT RATE CHART DIRECTLY UNDERNEATH THIS SPECIFIC PROP
-                render_prop_hit_rate_chart(prop_name, p_group)
-                st.divider()
+                    # ROLLING HIT RATE CHART DIRECTLY UNDERNEATH THIS SPECIFIC PROP (TIGHT & BORDERED)
+                    render_prop_hit_rate_chart(prop_name, p_group)
 
 # ==============================================================================
 # SCREEN 1: PRO VISUALIZER (OVER / UNDER)
@@ -828,6 +842,7 @@ elif app_mode == "📋 Master EV Tables":
                 st.info("No data in this sheet.")
                 continue
 
+            # TOP-LINE FILTERS
             tf1, tf2, tf3, tf4, tf5 = st.columns([1, 1, 1, 1, 2])
             with tf1:
                 t_list = ["All Teams"] + sorted(df["Team"].dropna().astype(str).unique().tolist()) if "Team" in df.columns else ["All Teams"]
@@ -846,6 +861,7 @@ elif app_mode == "📋 Master EV Tables":
             with tf5:
                 f_search = st.text_input(f"🔍 Search ({sheet_name}):", "", key=f"sr_{sheet_name}")
 
+            # Apply filters
             if f_team != "All Teams" and "Team" in df.columns:
                 df = df[df["Team"].astype(str) == f_team]
             if f_pos != "All Positions" and pos_col:

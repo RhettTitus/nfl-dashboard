@@ -8,7 +8,7 @@ import altair as alt
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# PROPS.CASH HIGH-CONTRAST CSS THEME
+# PROPS.CASH HIGH-CONTRAST CSS THEME (KILLS RED LINE & ENFORCES PURE WHITE TABS)
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -27,37 +27,40 @@ h1, h2, h3, h4, h5, h6 {
     letter-spacing: 0.3px !important;
 }
 
-/* PURE BRIGHT WHITE UNSELECTED TABS (FORCES ALL CHILDREN TO SOLID WHITE) */
-div[data-baseweb="tab-list"] {
-    gap: 8px !important;
+/* TARGET SPECIFIC STREAMLIT TABS (KILLS RED LINE, FORCES BRIGHT WHITE TABS) */
+[data-testid="stTabs"] {
     background-color: transparent !important;
+}
+[data-testid="stTabs"] div[data-baseweb="tab-list"] {
+    gap: 8px !important;
     border-bottom: none !important;
+    background-color: transparent !important;
     padding-bottom: 6px !important;
 }
-button[data-baseweb="tab"], 
-button[data-baseweb="tab"] * {
-    background-color: #151D2A !important;
-    color: #FFFFFF !important; /* PURE SOLID WHITE FOR ALL UNSELECTED TABS */
-    opacity: 1 !important;
-    font-weight: 800 !important;
-    font-size: 0.96rem !important;
-    letter-spacing: 0.3px !important;
+[data-testid="stTabs"] div[data-baseweb="tab-highlight"],
+[data-testid="stTabs"] div[data-baseweb="tab-border"] {
+    display: none !important; /* PERMANENTLY REMOVES RED UNDERLINE */
 }
-button[data-baseweb="tab"] {
+[data-testid="stTabs"] button[data-baseweb="tab"] {
+    background-color: #151D2A !important;
     border: 1.5px solid #2B3A52 !important;
     border-radius: 22px !important;
     padding: 8px 18px !important;
     margin-right: 6px !important;
 }
-button[data-baseweb="tab"][aria-selected="true"],
-button[data-baseweb="tab"][aria-selected="true"] * {
+[data-testid="stTabs"] button[data-baseweb="tab"] * {
+    color: #FFFFFF !important; /* PURE CRISP WHITE FOR ALL INACTIVE TABS */
+    font-size: 0.95rem !important;
+    font-weight: 800 !important;
+    opacity: 1 !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
     background-color: #1F2E45 !important;
-    color: #00E676 !important; /* GLOWING NEON GREEN WHEN SELECTED */
-    border-color: #00E676 !important;
+    border: 2px solid #00E676 !important;
     box-shadow: 0 0 12px rgba(0, 230, 118, 0.3) !important;
 }
-div[data-baseweb="tab-highlight"] {
-    display: none !important;
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
+    color: #00E676 !important; /* NEON GREEN WHEN SELECTED */
 }
 
 /* Selectbox Styling */
@@ -91,6 +94,7 @@ div[data-testid="stCheckbox"] label span:first-child {
 div[data-testid="stCheckbox"] label p {
     font-size: 0.98rem !important;
     font-weight: 800 !important;
+    letter-spacing: 0.3px !important;
     color: #F8FAFC !important;
 }
 </style>
@@ -382,40 +386,29 @@ def render_compact_book_box(r, chk_key):
     odds_str = f"({r['Odds']})" if r['Odds'] != "-" else ""
     prob_delta_str = f"({r['Prob Delta']})" if r['Prob Delta'] else ""
 
-    card_html = f"""
-    <div style="background:#111827; border:1.5px solid #243048; border-radius:10px; padding:14px 16px; margin-bottom:4px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <div style="display:flex; align-items:center;">
-                {book_html} {star_badge}
-            </div>
-            <span style="font-size:11px; font-weight:700; color:#FFFFFF; background:#1E293B; padding:3px 9px; border-radius:4px; letter-spacing:0.3px;">
-                {action_text}
-            </span>
-        </div>
-        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
-            <span style="font-size:1.30rem; font-weight:800; color:#FFFFFF; letter-spacing:0.4px;">
-                {r['Pick']} {format_clean_decimal(r['Vegas Line'])} <span style="font-size:0.95rem; font-weight:600; color:#94A3B8;">{odds_str}</span>
-            </span>
-            <span style="font-size:1.30rem; font-weight:800; color:#00E676; letter-spacing:0.3px;">
-                {r['EV']} EV
-            </span>
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size:0.88rem; font-weight:600; color:#94A3B8; letter-spacing:0.2px; margin-bottom:10px;">
-            <span>Model: <b style="color:#FFFFFF; font-weight:700;">{r['Win Prob']}</b></span>
-            <span>Book: <b style="color:#FFFFFF; font-weight:700;">{r['Book Win Prob']}</b> <span style="color:#00E676; font-weight:800;">{prob_delta_str}</span></span>
-        </div>
-        <div style="display:flex; align-items:center; justify-content:space-between; background:{margin_bg}; border:1.5px solid {margin_border}; border-radius:6px; padding:5px 10px;">
-            <span style="font-size:12px; font-weight:700; color:{margin_color}; letter-spacing:0.3px;">Margin vs Line:</span>
-            <span style="font-size:13px; font-weight:800; color:{margin_color}; letter-spacing:0.4px;">
-                {margin_arrow} {margin_val:+0.1f} (Proj: {format_clean_decimal(r['Model Projection'])})
-            </span>
-        </div>
-    </div>
-    """
+    card_html = (
+        f'<div style="background:#111827; border:1.5px solid #243048; border-radius:10px; padding:14px 16px; margin-bottom:4px;">'
+        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">'
+        f'<div style="display:flex; align-items:center;">{book_html} {star_badge}</div>'
+        f'<span style="font-size:11px; font-weight:700; color:#FFFFFF; background:#1E293B; padding:3px 9px; border-radius:4px; letter-spacing:0.3px;">{action_text}</span>'
+        f'</div>'
+        f'<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">'
+        f'<span style="font-size:1.30rem; font-weight:800; color:#FFFFFF; letter-spacing:0.4px;">{r["Pick"]} {format_clean_decimal(r["Vegas Line"])} <span style="font-size:0.95rem; font-weight:600; color:#94A3B8;">{odds_str}</span></span>'
+        f'<span style="font-size:1.30rem; font-weight:800; color:#00E676; letter-spacing:0.3px;">{r["EV"]} EV</span>'
+        f'</div>'
+        f'<div style="display:flex; justify-content:space-between; font-size:0.88rem; font-weight:600; color:#94A3B8; letter-spacing:0.2px; margin-bottom:10px;">'
+        f'<span>Model: <b style="color:#FFFFFF; font-weight:700;">{r["Win Prob"]}</b></span>'
+        f'<span>Book: <b style="color:#FFFFFF; font-weight:700;">{r["Book Win Prob"]}</b> <span style="color:#00E676; font-weight:800;">{prob_delta_str}</span></span>'
+        f'</div>'
+        f'<div style="display:flex; align-items:center; justify-content:space-between; background:{margin_bg}; border:1.5px solid {margin_border}; border-radius:6px; padding:5px 10px;">'
+        f'<span style="font-size:12px; font-weight:700; color:{margin_color}; letter-spacing:0.3px;">Margin vs Line:</span>'
+        f'<span style="font-size:13px; font-weight:800; color:{margin_color}; letter-spacing:0.4px;">{margin_arrow} {margin_val:+0.1f} (Proj: {format_clean_decimal(r["Model Projection"])})</span>'
+        f'</div>'
+        f'</div>'
+    )
     st.markdown(card_html, unsafe_allow_html=True)
     st.checkbox("➕ Add to Slip", key=chk_key)
 
-# PROPS.CASH CHART (VERTICAL DATES + PROTECTED NUMBERS)
 def render_prop_hit_rate_chart(base_prop_name, grp):
     last_5_raw = ""
     for _, r_cand in grp.iterrows():
@@ -431,8 +424,6 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
         if stats_list:
             total_g = len(stats_list)
             
-            # Generate Chronological Vertical Dates
-            # Pull real slate dates from recent weekly files if available
             date_labels = []
             if len(dated_files) >= total_g:
                 recent_chron_dates = [x["label"] for x in reversed(dated_files[:total_g])]
@@ -455,14 +446,13 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
             if max_line <= 3.0: y_max = max(max_val * 1.6, max_line * 2.2, 4.0)
             else: y_max = max(max_val * 1.45, max_line * 1.55)
 
-            # BARS WITH VERTICAL DATES UNDERNEATH (-90 DEGREE ROTATION)
             hit_bars = alt.Chart(t_df).mark_bar(size=30, cornerRadius=0, strokeWidth=0).encode(
                 x=alt.X(
                     "Date:N", 
                     title=None, 
                     sort=date_labels, 
                     axis=alt.Axis(
-                        labelAngle=-90, # STRICTLY VERTICAL UNDER EACH BAR
+                        labelAngle=-90, 
                         labelLimit=0, 
                         labelFontWeight="bold", 
                         labelColor="#FFFFFF", 
@@ -473,7 +463,6 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
-            # SOLID BLACK HALO: DOTTED LINE NEVER CUTS THROUGH NUMBERS
             text_bg = alt.Chart(t_df).mark_text(
                 dy=-14,
                 fontSize=13,
@@ -495,7 +484,6 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
                 color="#FFFFFF", strokeWidth=1.8, strokeDash=[4, 4]
             ).encode(y="y:Q")
 
-            # Layering order guarantees text mask erases the dotted line behind numbers
             combined_chart = (hit_bars + ref_line + text_bg + text_fg).properties(
                 height=260
             ).configure(
@@ -659,27 +647,28 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         grouped_props = p_props.groupby("Prop Name")
         prop_names_list = list(grouped_props.groups.keys())
 
-        # HERO PLAYER CARD
-        st.markdown(f"""
-        <div style="background:#0F1420; border:1.5px solid #232E44; border-radius:18px; padding:18px 22px; margin-bottom:16px; box-shadow:0 6px 14px rgba(0,0,0,0.4);">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-size:1.55rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>
-                    <div style="font-size:1.0rem; color:#94A3B8; font-weight:700; margin-top:2px;">{team_tag} • {player_depth_label}</div>
-                    <div style="margin-top:8px;">
-                        <span style="background-color:#172033; border:1px solid #2F3E5C; color:#00E676; font-weight:800; font-size:12.5px; padding:4px 14px; border-radius:14px; display:inline-block;">
-                            🏈 Props: <b>{len(p_props)}</b>
-                        </span>
-                    </div>
-                </div>
-                <div>
-                    <img src="{headshot_url}" style="width:95px; height:95px; border-radius:50%; object-fit:cover; border:3px solid #00E676; background:#1C2436; box-shadow:0 0 16px rgba(0,230,118,0.25);">
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        # HERO PLAYER CARD (NO 4-SPACE INDENTATION BLOCKS)
+        hero_card_html = (
+            f'<div style="background:#0F1420; border:1.5px solid #232E44; border-radius:18px; padding:18px 22px; margin-bottom:16px; box-shadow:0 6px 14px rgba(0,0,0,0.4);">'
+            f'<div style="display:flex; justify-content:space-between; align-items:center;">'
+            f'<div>'
+            f'<div style="font-size:1.55rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>'
+            f'<div style="font-size:1.0rem; color:#94A3B8; font-weight:700; margin-top:2px;">{team_tag} • {player_depth_label}</div>'
+            f'<div style="margin-top:8px;">'
+            f'<span style="background-color:#172033; border:1px solid #2F3E5C; color:#00E676; font-weight:800; font-size:12.5px; padding:4px 14px; border-radius:14px; display:inline-block;">'
+            f'🏈 Props: <b>{len(p_props)}</b>'
+            f'</span>'
+            f'</div>'
+            f'</div>'
+            f'<div>'
+            f'<img src="{headshot_url}" style="width:95px; height:95px; border-radius:50%; object-fit:cover; border:3px solid #00E676; background:#1C2436; box-shadow:0 0 16px rgba(0,230,118,0.25);">'
+            f'</div>'
+            f'</div>'
+            f'</div>'
+        )
+        st.markdown(hero_card_html, unsafe_allow_html=True)
 
-        # SOLID PURE-WHITE TABS (NOTHING GREYED OUT)
+        # SOLID PURE-WHITE TABS
         if len(prop_names_list) > 1:
             prop_tabs = st.tabs([f"{pn}" for pn in prop_names_list])
             for t_idx, prop_name in enumerate(prop_names_list):
@@ -688,7 +677,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         else:
             render_props_cash_tab_content(player, prop_names_list[0], grouped_props.get_group(prop_names_list[0]))
 
-# ALL DATA UNIFIED IN THE ABOVE SLOT (6-PACK + PILLS TOGETHER)
+# ALL DATA UNIFIED IN THE ABOVE SLOT (CLEAN STRING CONCATENATION, NO LEAKING CODE BLOCKS)
 def render_props_cash_tab_content(player, prop_name, p_group):
     dk_row = p_group[p_group["Book"] == "DraftKings"]
     fd_row = p_group[p_group["Book"] == "FanDuel"]
@@ -718,54 +707,29 @@ def render_props_cash_tab_content(player, prop_name, p_group):
     ev_val = primary_row['EV']
     win_prob = primary_row['Win Prob']
 
-    # 1. ALL INFORMATION UNIFIED TOGETHER IN THE ABOVE SLOT
-    st.markdown(f"""
-    <div style="background:#0C111C; border:1.5px solid #1E283D; border-radius:14px; padding:16px 20px; margin-top:4px; margin-bottom:14px; box-shadow:0 6px 16px rgba(0,0,0,0.4);">
-        <!-- Row 1: The 6-Pack Grid -->
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 65px; gap:8px; align-items:center; margin-bottom:14px;">
-            <div>
-                <div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">L5 AVG</div>
-                <div style="font-size:18px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_display}</div>
-            </div>
-            <div>
-                <div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">LINE</div>
-                <div style="font-size:18px; font-weight:900; color:#FFFFFF;">{line_display} &gt;</div>
-            </div>
-            <div>
-                <div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">PROP</div>
-                <div style="font-size:15px; font-weight:900; color:#FFFFFF;">{prop_name}</div>
-            </div>
-            <div>
-                <div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">HIT RATE</div>
-                <div style="font-size:18px; font-weight:900; color:{hit_rate_color};">{hit_rate_display}</div>
-            </div>
-            <div>
-                <div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">PROJECTION</div>
-                <div style="font-size:18px; font-weight:900; color:#00E676;">{proj_display}</div>
-            </div>
-            <!-- Circular Grade Ring -->
-            <div style="text-align:center;">
-                <div style="width:42px; height:42px; border-radius:50%; border:3px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:18px; background:#161E2E; box-shadow:0 0 12px rgba(0,230,118,0.35);">
-                    {grade_char}
-                </div>
-                <div style="font-size:10px; color:#94A3B8; font-weight:800; margin-top:2px;">Matchup</div>
-            </div>
-        </div>
-
-        <!-- Subtle Divider Inside the Slot -->
-        <div style="height:1px; background:#1E283D; margin-bottom:12px;"></div>
-
-        <!-- Row 2: All Context Pills Right Here in the Above Slot -->
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">L5: <b style="color:{hit_rate_color};">{hit_rate_display}</b></span>
-            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">H2H: <b style="color:#00E676;">60%</b></span>
-            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>
-            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">Edge: <b style="color:#00E676;">{ev_val}</b></span>
-            <span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:900;">DvP: 28th</span>
-            <span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:900;">Def Rank: 30th</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # 1. UNIFIED COCKPIT (6-PACK + ALL CONTEXT PILLS TOGETHER IN ONE SLOT)
+    unified_card_html = (
+        f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-radius:14px; padding:16px 20px; margin-top:4px; margin-bottom:14px; box-shadow:0 6px 16px rgba(0,0,0,0.4);">'
+        f'<div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 65px; gap:8px; align-items:center; margin-bottom:14px;">'
+        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">L5 AVG</div><div style="font-size:18px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_display}</div></div>'
+        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">LINE</div><div style="font-size:18px; font-weight:900; color:#FFFFFF;">{line_display} &gt;</div></div>'
+        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">PROP</div><div style="font-size:15px; font-weight:900; color:#FFFFFF;">{prop_name}</div></div>'
+        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">HIT RATE</div><div style="font-size:18px; font-weight:900; color:{hit_rate_color};">{hit_rate_display}</div></div>'
+        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">PROJECTION</div><div style="font-size:18px; font-weight:900; color:#00E676;">{proj_display}</div></div>'
+        f'<div style="text-align:center;"><div style="width:42px; height:42px; border-radius:50%; border:3px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:18px; background:#161E2E; box-shadow:0 0 12px rgba(0,230,118,0.35);">{grade_char}</div><div style="font-size:10px; color:#94A3B8; font-weight:800; margin-top:2px;">Matchup</div></div>'
+        f'</div>'
+        f'<div style="height:1px; background:#1E283D; margin-bottom:12px;"></div>'
+        f'<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">'
+        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">L5: <b style="color:{hit_rate_color};">{hit_rate_display}</b></span>'
+        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">H2H: <b style="color:#00E676;">60%</b></span>'
+        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>'
+        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">Edge: <b style="color:#00E676;">{ev_val}</b></span>'
+        f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:900;">DvP: 28th</span>'
+        f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:900;">Def Rank: 30th</span>'
+        f'</div>'
+        f'</div>'
+    )
+    st.markdown(unified_card_html, unsafe_allow_html=True)
 
     # 2. PROPS.CASH CHART (VERTICAL DATES + HALO PROTECTED NUMBERS)
     render_prop_hit_rate_chart(prop_name, p_group)

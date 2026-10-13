@@ -8,89 +8,82 @@ import altair as alt
 st.set_page_config(page_title="Props.Cash NFL Analytics", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# EXACT PROPS.CASH MOBILE-VIEWPORT CSS (FITS PHONE SCREEN WITHOUT SCROLLING)
+# TOGGLEABLE VIEWPORT (MOBILE PHONE VS. DESKTOP WIDE MODE)
 # --------------------------------------------------------------------------
-st.markdown("""
+is_desktop = st.sidebar.toggle("🖥️ Desktop Wide Mode", value=False)
+
+max_w_css = "100%" if is_desktop else "600px"
+
+st.markdown(f"""
 <style>
-/* Pure Dark Background */
-.stApp {
+.stApp {{
     background-color: #07090E !important;
     color: #F8FAFC !important;
 }
-
-/* Compact Container Padding */
-.block-container {
+.block-container {{
     padding-top: 1rem !important;
     padding-bottom: 1rem !important;
-    padding-left: 0.8rem !important;
-    padding-right: 0.8rem !important;
-    max-width: 600px !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    max-width: {max_w_css} !important;
     margin: auto !important;
-}
-
-/* Force All Headings to Pure White */
-h1, h2, h3, h4, h5, h6, p, div {
+}}
+h1, h2, h3, h4, h5, h6, p, div {{
     color: #F8FAFC !important;
-}
-
-/* High-Contrast Filters */
-div[data-baseweb="select"] > div {
+}}
+div[data-baseweb="select"] > div {{
     background-color: #121824 !important;
     border: 1px solid #23304A !important;
     color: #FFFFFF !important;
     border-radius: 8px !important;
 }
-div[data-baseweb="select"] * {
+div[data-baseweb="select"] * {{
     color: #FFFFFF !important;
     font-size: 0.88rem !important;
     font-weight: 700 !important;
 }
-
-/* PROPS.CASH PILL TABS */
-div[data-baseweb="tab-list"] {
+div[data-baseweb="tab-list"] {{
     gap: 6px !important;
     border-bottom: none !important;
     padding-bottom: 2px !important;
 }
 button[data-baseweb="tab"], 
-button[data-baseweb="tab"] * {
+button[data-baseweb="tab"] * {{
     background-color: #131A29 !important;
     color: #FFFFFF !important;
     font-size: 0.88rem !important;
     font-weight: 800 !important;
 }
-button[data-baseweb="tab"] {
+button[data-baseweb="tab"] {{
     border: 1px solid #23304A !important;
     border-radius: 18px !important;
     padding: 5px 14px !important;
     margin-right: 4px !important;
 }
 button[data-baseweb="tab"][aria-selected="true"],
-button[data-baseweb="tab"][aria-selected="true"] * {
+button[data-baseweb="tab"][aria-selected="true"] * {{
     background-color: #1F2B42 !important;
     color: #00DF81 !important;
     border-color: #00DF81 !important;
-}
-div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {
+}}
+div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {{
     display: none !important;
 }
-
-/* Compact Mobile Checkboxes */
-div[data-testid="stCheckbox"] {
+div[data-testid="stCheckbox"] {{
     background: transparent !important;
     border: none !important;
     padding: 2px 0px !important;
     margin-top: 2px !important;
 }
-div[data-testid="stCheckbox"] label span:first-child {
+div[data-testid="stCheckbox"] label span:first-child {{
     width: 20px !important;
     height: 20px !important;
-}
-div[data-testid="stCheckbox"] label p {
+}}
+div[data-testid="stCheckbox"] label p {{
     font-size: 0.85rem !important;
     font-weight: 800 !important;
     color: #94A3B8 !important;
-}
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -325,7 +318,7 @@ def render_compact_book_box(r, chk_key):
     st.markdown(card_html, unsafe_allow_html=True)
     st.checkbox("➕ Add to Slip", key=chk_key)
 
-# FULLY SCHEMA-COMPLIANT ALTAIR CHART
+# FULLY STABLE SCHEMA-COMPLIANT CHART RENDERER
 def render_exact_props_cash_chart(base_prop_name, grp):
     last_5_raw = ""
     for _, r_cand in grp.iterrows():
@@ -362,25 +355,16 @@ def render_exact_props_cash_chart(base_prop_name, grp):
             if max_line <= 3.0: y_max = max(max_val * 1.5, max_line * 2.0, 3.5)
             else: y_max = max(max_val * 1.35, max_line * 1.45)
 
-            # Schema-compliant single dataframe reference
-            base_chart = alt.Chart(t_df).encode(
+            hit_bars = alt.Chart(t_df).mark_bar(size=28, cornerRadius=0, strokeWidth=0).encode(
                 x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=-90, labelColor="#94A3B8", labelFontSize=10)),
-                y=alt.Y("Value:Q", title=None, scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(labels=True, labelColor="#94A3B8", gridColor="#192333"))
-            )
-
-            hit_bars = base_chart.mark_bar(size=28, cornerRadius=0, strokeWidth=0).encode(
+                y=alt.Y("Value:Q", title=None, scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(labels=True, labelColor="#94A3B8", gridColor="#192333")),
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
-            bar_text = base_chart.mark_text(
-                dy=-6,
-                baseline="bottom",
-                fontSize=11.5,
-                fontWeight="900",
-                color="#0A0E17",
-                stroke="#FFFFFF",
-                strokeWidth=0.5
+            bar_text = alt.Chart(t_df).mark_text(
+                dy=-6, baseline="bottom", fontSize=11.5, fontWeight="900", color="#0A0E17", stroke="#FFFFFF", strokeWidth=0.5
             ).encode(
+                x=alt.X("Date:N", sort=date_labels),
                 y=alt.value(165),
                 text=alt.Text("Value:Q", format=".1f")
             )
@@ -393,7 +377,7 @@ def render_exact_props_cash_chart(base_prop_name, grp):
                 align="left", dx=2, dy=-8, fontSize=10, fontWeight="bold", color="#FFFFFF"
             ).encode(y="y:Q", text=alt.value(f"{primary_line:.1f}"))
 
-            final_chart = alt.layer(hit_bars, ref_line, line_label, bar_text).properties(
+            final_chart = alt.layer(hit_bars, ref_line, line_label, bar_text, data=t_df).properties(
                 height=190
             ).configure(
                 background="transparent"

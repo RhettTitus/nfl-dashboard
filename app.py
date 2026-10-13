@@ -290,7 +290,37 @@ def tag_best_line_advantages(df):
 
     return df
 
-# Compact Box Renderer with Checkbox for Tap-to-Add
+def render_gambly_copy_box(df, box_title="📋 Gambly / Tracker Copy Slip"):
+    with st.expander(box_title, expanded=False):
+        c_book = st.selectbox(
+            "Select Sportsbook for Copy Slip:",
+            ["DraftKings", "FanDuel", "All Books (Combined)"],
+            key=f"cb_{box_title}"
+        )
+        
+        slip_df = df.copy()
+        if c_book != "All Books (Combined)":
+            slip_df = slip_df[slip_df["Book"] == c_book]
+            
+        slip_lines = []
+        for _, r in slip_df.iterrows():
+            p = str(r["Player"]).strip()
+            side = str(r["Pick"]).strip()
+            line = format_clean_decimal(r["Vegas Line"])
+            prop = str(r["Prop Name"]).strip()
+            
+            bet_str = format_gambly_bet_string(p, side, line, prop)
+            if bet_str and "nan" not in bet_str.lower():
+                slip_lines.append(bet_str)
+                
+        slip_lines = list(dict.fromkeys(slip_lines))
+        
+        if slip_lines:
+            st.caption(f"Showing **{len(slip_lines)}** {c_book} bets (Click icon in top-right to copy):")
+            st.code("\n".join(slip_lines), language="text")
+        else:
+            st.info(f"No bets available for {c_book} under current filters.")
+
 def render_compact_book_box(r, chk_key):
     book_html = get_book_styled(r["Book"])
     star_badge = get_best_line_badge_html(r["Line_Adv_Note"])
@@ -342,10 +372,9 @@ def render_compact_book_box(r, chk_key):
     </div>
     """
     st.markdown(card_html, unsafe_allow_html=True)
-    # Checkbox with large mobile touch area
     st.checkbox("➕ Add to Slip", key=chk_key)
 
-# Render Hit Rate Chart Directly for a Prop
+# Render Hit Rate Chart with Flat, Unrounded, Unoutlined Bars
 def render_prop_hit_rate_chart(base_prop_name, grp):
     last_5_raw = ""
     for _, r_cand in grp.iterrows():
@@ -380,13 +409,16 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
                 star_b = f" {b_row['Line_Adv_Note']}" if b_row["Line_Adv_Note"] else ""
                 book_badges_summary.append(f"[{b_html}]{star_b} Line `{format_clean_decimal(cur_line)}` ({hits}/{total_g} — {hit_pct}%)")
 
-            st.caption("📈 **Historical Trend:** " + " | ".join(book_badges_summary))
+            # Clean HTML render without leaking <span> code
+            summary_html = " | ".join(book_badges_summary)
+            st.markdown(f"<div style='font-size:0.88rem; color:#334155; margin-bottom:6px;'>📈 <b>Historical Trend:</b> {summary_html}</div>", unsafe_allow_html=True)
 
             primary_line = grp["Vegas Line"].iloc[0]
             t_df["Result"] = t_df["Value"].apply(lambda v: "Over Hit" if v >= primary_line else "Under Miss")
             y_max = max(max(t_df["Value"]), grp["Vegas Line"].max()) * 1.30
 
-            hit_bars = alt.Chart(t_df).mark_bar(size=26, cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
+            # FLAT, UNROUNDED, UN-OUTLINED BARS (cornerRadius=0, strokeWidth=0)
+            hit_bars = alt.Chart(t_df).mark_bar(size=26, cornerRadius=0, strokeWidth=0).encode(
                 x=alt.X("Game:N", title="Chronological Game Log (Oldest ➔ Latest)", sort=chronological_labels, axis=alt.Axis(labelLimit=0)),
                 y=alt.Y("Value:Q", title="Stat Value", scale=alt.Scale(domain=[0, y_max])),
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#10B981", "#EF4444"]), legend=alt.Legend(title=None, orient="top"))
@@ -514,7 +546,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         return
 
     # --------------------------------------------------------------------------
-    # INTERACTIVE TAP-TO-ADD GAMBLY SLIPS (STARTS BLANK, BUILDS SEPARATE SHEETS)
+    # INTERACTIVE TAP-TO-ADD GAMBLY SLIPS (STARTS BLANK, SEPARATE PER BOOK)
     # --------------------------------------------------------------------------
     selected_dk_bets = []
     selected_fd_bets = []

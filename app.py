@@ -325,7 +325,6 @@ def render_compact_book_box(r, chk_key):
     st.markdown(card_html, unsafe_allow_html=True)
     st.checkbox("➕ Add to Slip", key=chk_key)
 
-# ROBUST ALTAIR CHART RENDERER (SCHEMA COMPLIANT)
 def render_exact_props_cash_chart(base_prop_name, grp):
     last_5_raw = ""
     for _, r_cand in grp.iterrows():
@@ -362,7 +361,6 @@ def render_exact_props_cash_chart(base_prop_name, grp):
             if max_line <= 3.0: y_max = max(max_val * 1.5, max_line * 2.0, 3.5)
             else: y_max = max(max_val * 1.35, max_line * 1.45)
 
-            # SCHEMA-COMPLIANT LAYERED CHART
             base_chart = alt.Chart(t_df).encode(
                 x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=-90, labelColor="#94A3B8", labelFontSize=10)),
                 y=alt.Y("Value:Q", title=None, scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(labels=True, labelColor="#94A3B8", gridColor="#192333"))
@@ -404,7 +402,7 @@ def render_exact_props_cash_chart(base_prop_name, grp):
             st.altair_chart(final_chart, use_container_width=True)
 
 # FULL PROPS.CASH DASHBOARD
-def render_prop_visualizer(combined_df, is_alt_mode=False):
+def render_props_cash_view(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
 
@@ -513,11 +511,12 @@ def render_props_cash_tab_content(player, prop_name, p_group):
     line_display = format_clean_decimal(primary_row["Vegas Line"])
     proj_display = format_clean_decimal(primary_row["Model Projection"])
     grade_char = primary_row.get("Grade", "A")
+    margin_num = primary_row["Margin"]
 
     last_5_raw = str(primary_row.get("Last 5", "")).strip()
     l5_avg_disp = "-"
     hit_rate_disp = "-"
-    hit_color = "#00DF81"
+    hit_color = "#00E676"
 
     if last_5_raw and last_5_raw not in ["-", "nan", ""]:
         try:
@@ -527,7 +526,7 @@ def render_props_cash_tab_content(player, prop_name, p_group):
                 hits = sum(x >= float(primary_row["Vegas Line"]) for x in s_list)
                 pct = round((hits / len(s_list)) * 100)
                 hit_rate_disp = f"▲ {pct}%"
-                hit_color = "#00DF81" if pct >= 50 else "#FF3B30"
+                hit_color = "#00E676" if pct >= 50 else "#FF3B30"
         except: pass
 
     ev_val = primary_row['EV']
@@ -580,10 +579,12 @@ def render_props_cash_tab_content(player, prop_name, p_group):
 # ==============================================================================
 if app_mode == "📊 Props.Cash: Over / Under":
     ou_df = load_visualizer_data(["Top DK OU", "Top FD OU"])
-    if not ou_df.empty: render_props_cash_view(ou_df, is_alt_mode=False)
+    if ou_df.empty: st.warning("No Over/Under props found.")
+    else: render_props_cash_view(ou_df, is_alt_mode=False)
 elif app_mode == "⚡ Props.Cash: Alt Lines":
     alt_df = load_visualizer_data(["Top DK Alt Lines", "Top FD Alt Lines"])
-    if not alt_df.empty: render_props_cash_view(alt_df, is_alt_mode=True)
+    if alt_df.empty: st.warning("No Alt Line props found.")
+    else: render_props_cash_view(alt_df, is_alt_mode=True)
 elif app_mode == "💎 Best of the Best (Top Edges)":
     st.markdown("<h2 style='color:#FFFFFF; font-weight:900;'>💎 Top Conviction Plays</h2>", unsafe_allow_html=True)
     all_curated = load_visualizer_data(["Top DK OU", "Top FD OU", "Top DK Alt Lines", "Top FD Alt Lines"])

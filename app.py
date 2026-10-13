@@ -325,6 +325,7 @@ def render_compact_book_box(r, chk_key):
     st.markdown(card_html, unsafe_allow_html=True)
     st.checkbox("➕ Add to Slip", key=chk_key)
 
+# FULLY SCHEMA-COMPLIANT ALTAIR CHART
 def render_exact_props_cash_chart(base_prop_name, grp):
     last_5_raw = ""
     for _, r_cand in grp.iterrows():
@@ -361,6 +362,7 @@ def render_exact_props_cash_chart(base_prop_name, grp):
             if max_line <= 3.0: y_max = max(max_val * 1.5, max_line * 2.0, 3.5)
             else: y_max = max(max_val * 1.35, max_line * 1.45)
 
+            # Schema-compliant single dataframe reference
             base_chart = alt.Chart(t_df).encode(
                 x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=-90, labelColor="#94A3B8", labelFontSize=10)),
                 y=alt.Y("Value:Q", title=None, scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(labels=True, labelColor="#94A3B8", gridColor="#192333"))

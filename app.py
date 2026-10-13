@@ -5,97 +5,91 @@ import re
 from datetime import datetime, timedelta
 import altair as alt
 
-st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
+st.set_page_config(page_title="Props.Cash NFL Analytics", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# PROPS.CASH HIGH-CONTRAST CSS THEME (KILLS RED LINE & ENFORCES PURE WHITE TABS)
+# EXACT PROPS.CASH MOBILE-VIEWPORT CSS (FITS PHONE SCREEN WITHOUT SCROLLING)
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
-/* Clean Mobile System Font */
-html, body, [class*="css"], .stApp {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+/* Pure Dark Background */
+.stApp {
     background-color: #07090E !important;
     color: #F8FAFC !important;
-    -webkit-font-smoothing: antialiased !important;
 }
 
-/* Crisp Headings */
-h1, h2, h3, h4, h5, h6 {
+/* Compact Container Padding */
+.block-container {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+    padding-left: 0.8rem !important;
+    padding-right: 0.8rem !important;
+    max-width: 600px !important; /* Locks width to phone aspect ratio */
+    margin: auto !important;
+}
+
+/* Force All Headings to Pure White */
+h1, h2, h3, h4, h5, h6, p, div {
     color: #F8FAFC !important;
-    font-weight: 800 !important;
-    letter-spacing: 0.3px !important;
 }
 
-/* TARGET SPECIFIC STREAMLIT TABS (KILLS RED LINE, FORCES BRIGHT WHITE TABS) */
-[data-testid="stTabs"] {
-    background-color: transparent !important;
-}
-[data-testid="stTabs"] div[data-baseweb="tab-list"] {
-    gap: 8px !important;
-    border-bottom: none !important;
-    background-color: transparent !important;
-    padding-bottom: 6px !important;
-}
-[data-testid="stTabs"] div[data-baseweb="tab-highlight"],
-[data-testid="stTabs"] div[data-baseweb="tab-border"] {
-    display: none !important; /* PERMANENTLY REMOVES RED UNDERLINE */
-}
-[data-testid="stTabs"] button[data-baseweb="tab"] {
-    background-color: #151D2A !important;
-    border: 1.5px solid #2B3A52 !important;
-    border-radius: 22px !important;
-    padding: 8px 18px !important;
-    margin-right: 6px !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"] * {
-    color: #FFFFFF !important; /* PURE CRISP WHITE FOR ALL INACTIVE TABS */
-    font-size: 0.95rem !important;
-    font-weight: 800 !important;
-    opacity: 1 !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
-    background-color: #1F2E45 !important;
-    border: 2px solid #00E676 !important;
-    box-shadow: 0 0 12px rgba(0, 230, 118, 0.3) !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
-    color: #00E676 !important; /* NEON GREEN WHEN SELECTED */
-}
-
-/* Selectbox Styling */
+/* High-Contrast Filters */
 div[data-baseweb="select"] > div {
     background-color: #121824 !important;
-    border: 1.5px solid #23304A !important;
+    border: 1px solid #23304A !important;
     color: #FFFFFF !important;
-    border-radius: 10px !important;
+    border-radius: 8px !important;
 }
 div[data-baseweb="select"] * {
     color: #FFFFFF !important;
+    font-size: 0.88rem !important;
     font-weight: 700 !important;
 }
-div[data-baseweb="popover"] {
-    background-color: #121824 !important;
+
+/* PROPS.CASH PILL TABS (NO RED LINE, PURE WHITE LABELS) */
+div[data-baseweb="tab-list"] {
+    gap: 6px !important;
+    border-bottom: none !important;
+    padding-bottom: 2px !important;
+}
+button[data-baseweb="tab"], 
+button[data-baseweb="tab"] * {
+    background-color: #131A29 !important;
+    color: #FFFFFF !important;
+    font-size: 0.88rem !important;
+    font-weight: 800 !important;
+}
+button[data-baseweb="tab"] {
+    border: 1px solid #23304A !important;
+    border-radius: 18px !important;
+    padding: 5px 14px !important;
+    margin-right: 4px !important;
+}
+button[data-baseweb="tab"][aria-selected="true"],
+button[data-baseweb="tab"][aria-selected="true"] * {
+    background-color: #1F2E45 !important;
+    color: #00DF81 !important;
+    border-color: #00DF81 !important;
+}
+div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {
+    display: none !important;
 }
 
-/* Checkbox Touch Target */
+/* Compact Mobile Checkboxes */
 div[data-testid="stCheckbox"] {
-    background: #121824 !important;
-    border: 1.5px solid #23304A !important;
-    border-radius: 8px !important;
-    padding: 8px 12px !important;
-    margin-top: 6px !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 2px 0px !important;
+    margin-top: 2px !important;
 }
 div[data-testid="stCheckbox"] label span:first-child {
-    width: 22px !important;
-    height: 22px !important;
-    margin-right: 8px !important;
+    width: 20px !important;
+    height: 20px !important;
 }
 div[data-testid="stCheckbox"] label p {
-    font-size: 0.98rem !important;
+    font-size: 0.85rem !important;
     font-weight: 800 !important;
-    letter-spacing: 0.3px !important;
-    color: #F8FAFC !important;
+    color: #94A3B8 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -126,7 +120,7 @@ for f in all_raw_files:
         dated_files.append({"filename": f, "date": d, "label": d.strftime("%-m/%-d")})
 
 if not dated_files:
-    st.info("👋 No dated spreadsheets (e.g. 10-9-26.xlsx) found in `./data`. Push a slate from Colab to begin!")
+    st.info("👋 No dated spreadsheets found in `./data`. Push a slate from Colab to begin!")
     st.stop()
 
 dated_files.sort(key=lambda x: x["date"], reverse=True)
@@ -158,27 +152,24 @@ headshot_db = load_verified_headshots()
 
 def get_headshot_url(player_name):
     c_name = clean_player_name(player_name)
-    if c_name in headshot_db:
-        return headshot_db[c_name]
+    if c_name in headshot_db: return headshot_db[c_name]
     for db_name, url in headshot_db.items():
-        if c_name in db_name or db_name in c_name:
-            return url
+        if c_name in db_name or db_name in c_name: return url
     parts = c_name.split()
     if len(parts) >= 2:
         last = parts[-1]
         first_init = parts[0][0]
         for db_name, url in headshot_db.items():
-            if db_name.endswith(last) and db_name.startswith(first_init):
-                return url
+            if db_name.endswith(last) and db_name.startswith(first_init): return url
     return "https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/default.png&w=150&h=150"
 
 def get_book_styled(book_name):
     b = str(book_name).strip()
     if "draftkings" in b.lower() or "dk" in b.lower():
-        return '<span style="color:#00E676; font-weight:800; letter-spacing:0.3px;">DraftKings</span>'
+        return '<span style="color:#00DF81; font-weight:800;">DK</span>'
     elif "fanduel" in b.lower() or "fd" in b.lower():
-        return '<span style="color:#0091FF; font-weight:800; letter-spacing:0.3px;">FanDuel</span>'
-    return f"<span style='font-weight:700; color:#FFFFFF;'>{b}</span>"
+        return '<span style="color:#0091FF; font-weight:800;">FD</span>'
+    return f"<span>{b}</span>"
 
 def format_percentage(val, is_ev=False):
     if pd.isna(val) or val == "-" or str(val).strip().lower() in ["nan", "none", "", "unposted"]:
@@ -207,11 +198,6 @@ def format_american_odds(val):
         return f"+{f_val}" if f_val > 0 else f"{f_val}"
     except:
         return str(val)
-
-def get_best_line_badge_html(line_adv_note):
-    if line_adv_note:
-        return f'<span style="background-color:#FEF3C7; color:#92400E; padding:3px 8px; border-radius:8px; font-weight:800; font-size:11px; letter-spacing:0.3px; margin-left:6px;">{line_adv_note}</span>'
-    return ""
 
 def extract_sanitized_prop_and_line(r):
     p_val = r.get("Prop")
@@ -252,8 +238,7 @@ def get_or_calculate_book_prob(book_prob_raw, odds_raw):
         try:
             v = float(str(book_prob_raw).replace("%", "").strip())
             return v if abs(v) <= 1.0 else v / 100.0
-        except:
-            pass
+        except: pass
 
     if pd.notna(odds_raw) and str(odds_raw).strip().lower() not in ["-", "nan", "none", "", "unposted"]:
         try:
@@ -262,23 +247,22 @@ def get_or_calculate_book_prob(book_prob_raw, odds_raw):
             if o_num >= 100: return 100.0 / (o_num + 100.0)
             elif o_num <= -100: return abs(o_num) / (abs(o_num) + 100.0)
             elif 1.01 <= o_num < 50.0: return 1.0 / o_num
-        except:
-            pass
+        except: pass
     return None
 
 # --------------------------------------------------------------------------
 # SIDEBAR NAVIGATION
 # --------------------------------------------------------------------------
-st.sidebar.title("🏈 NFL Quant Engine")
+st.sidebar.title("🏈 Props.Cash Engine")
 file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate:", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
 app_mode = st.sidebar.radio(
-    "📱 Screen:", 
+    "📱 View Mode:", 
     [
-        "📊 Pro Visualizer: Over / Under",
-        "⚡ Pro Visualizer: Alt Lines",
+        "📊 Props.Cash: Over / Under",
+        "⚡ Props.Cash: Alt Lines",
         "💎 Best of the Best (Top Edges)",
         "📋 Master EV Tables"
     ]
@@ -304,112 +288,10 @@ def load_visualizer_data(target_sheets):
     if not all_rows: return pd.DataFrame()
     return pd.concat(all_rows, ignore_index=True)
 
-def tag_best_line_advantages(df):
-    if df.empty: return df
-    df["Is_Best_Line"] = False
-    df["Line_Adv_Note"] = ""
-
-    def parse_ev_float(v):
-        try: return float(str(v).replace("%", "").strip())
-        except: return -1.0
-    
-    df["_ev_num"] = df["EV"].apply(parse_ev_float)
-
-    for (p_name, prop_n), grp in df.groupby(["Player", "Prop Name"]):
-        if len(grp) > 1:
-            side = grp["Pick"].iloc[0]
-            if side == "Over":
-                min_line = grp["Vegas Line"].min()
-                candidates = grp[grp["Vegas Line"] == min_line]
-                best_idx = candidates["_ev_num"].idxmax()
-                diff = grp["Vegas Line"].max() - min_line
-                df.loc[best_idx, "Is_Best_Line"] = True
-                df.loc[best_idx, "Line_Adv_Note"] = f"⭐ BEST LINE (+{diff:.1f} adv)" if diff > 0 else "⭐ BEST ODDS"
-            else:
-                max_line = grp["Vegas Line"].max()
-                candidates = grp[grp["Vegas Line"] == max_line]
-                best_idx = candidates["_ev_num"].idxmax()
-                diff = max_line - grp["Vegas Line"].min()
-                df.loc[best_idx, "Is_Best_Line"] = True
-                df.loc[best_idx, "Line_Adv_Note"] = f"⭐ BEST LINE (+{diff:.1f} adv)" if diff > 0 else "⭐ BEST ODDS"
-        elif len(grp) == 1:
-            idx = grp.index[0]
-            if grp.loc[idx, "_ev_num"] >= 0.05:
-                df.loc[idx, "Is_Best_Line"] = True
-                df.loc[idx, "Line_Adv_Note"] = "⭐ TOP VALUE"
-
-    return df
-
-def render_gambly_copy_box(df, box_title="📋 Gambly / Tracker Copy Slip"):
-    with st.expander(box_title, expanded=False):
-        c_book = st.selectbox(
-            "Select Sportsbook for Copy Slip:",
-            ["DraftKings", "FanDuel", "All Books (Combined)"],
-            key=f"cb_{box_title}"
-        )
-        
-        slip_df = df.copy()
-        if c_book != "All Books (Combined)":
-            slip_df = slip_df[slip_df["Book"] == c_book]
-            
-        slip_lines = []
-        for _, r in slip_df.iterrows():
-            p = str(r["Player"]).strip()
-            side = str(r["Pick"]).strip()
-            line = format_clean_decimal(r["Vegas Line"])
-            prop = str(r["Prop Name"]).strip()
-            
-            bet_str = format_gambly_bet_string(p, side, line, prop)
-            if bet_str and "nan" not in bet_str.lower():
-                slip_lines.append(bet_str)
-                
-        slip_lines = list(dict.fromkeys(slip_lines))
-        
-        if slip_lines:
-            st.caption(f"Showing **{len(slip_lines)}** {c_book} bets (Click icon in top-right to copy):")
-            st.code("\n".join(slip_lines), language="text")
-        else:
-            st.info(f"No bets available for {c_book} under current filters.")
-
-def render_compact_book_box(r, chk_key):
-    book_html = get_book_styled(r["Book"])
-    star_badge = get_best_line_badge_html(r["Line_Adv_Note"])
-    action_text = r["Action"]
-    
-    margin_val = r["Margin"]
-    is_pos = margin_val >= 0
-    margin_arrow = "▲" if is_pos else "▼"
-    margin_bg = "#00E67614" if is_pos else "#FF3B3014"
-    margin_border = "#00E67699" if is_pos else "#FF3B3099"
-    margin_color = "#00E676" if is_pos else "#FF3B30"
-
-    odds_str = f"({r['Odds']})" if r['Odds'] != "-" else ""
-    prob_delta_str = f"({r['Prob Delta']})" if r['Prob Delta'] else ""
-
-    card_html = (
-        f'<div style="background:#111827; border:1.5px solid #243048; border-radius:10px; padding:14px 16px; margin-bottom:4px;">'
-        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">'
-        f'<div style="display:flex; align-items:center;">{book_html} {star_badge}</div>'
-        f'<span style="font-size:11px; font-weight:700; color:#FFFFFF; background:#1E293B; padding:3px 9px; border-radius:4px; letter-spacing:0.3px;">{action_text}</span>'
-        f'</div>'
-        f'<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">'
-        f'<span style="font-size:1.30rem; font-weight:800; color:#FFFFFF; letter-spacing:0.4px;">{r["Pick"]} {format_clean_decimal(r["Vegas Line"])} <span style="font-size:0.95rem; font-weight:600; color:#94A3B8;">{odds_str}</span></span>'
-        f'<span style="font-size:1.30rem; font-weight:800; color:#00E676; letter-spacing:0.3px;">{r["EV"]} EV</span>'
-        f'</div>'
-        f'<div style="display:flex; justify-content:space-between; font-size:0.88rem; font-weight:600; color:#94A3B8; letter-spacing:0.2px; margin-bottom:10px;">'
-        f'<span>Model: <b style="color:#FFFFFF; font-weight:700;">{r["Win Prob"]}</b></span>'
-        f'<span>Book: <b style="color:#FFFFFF; font-weight:700;">{r["Book Win Prob"]}</b> <span style="color:#00E676; font-weight:800;">{prob_delta_str}</span></span>'
-        f'</div>'
-        f'<div style="display:flex; align-items:center; justify-content:space-between; background:{margin_bg}; border:1.5px solid {margin_border}; border-radius:6px; padding:5px 10px;">'
-        f'<span style="font-size:12px; font-weight:700; color:{margin_color}; letter-spacing:0.3px;">Margin vs Line:</span>'
-        f'<span style="font-size:13px; font-weight:800; color:{margin_color}; letter-spacing:0.4px;">{margin_arrow} {margin_val:+0.1f} (Proj: {format_clean_decimal(r["Model Projection"])})</span>'
-        f'</div>'
-        f'</div>'
-    )
-    st.markdown(card_html, unsafe_allow_html=True)
-    st.checkbox("➕ Add to Slip", key=chk_key)
-
-def render_prop_hit_rate_chart(base_prop_name, grp):
+# --------------------------------------------------------------------------
+# EXACT PROPS.CASH CHART (NUMBERS AT BASE OF BARS, NEVER CUT BY LINE)
+# --------------------------------------------------------------------------
+def render_exact_props_cash_chart(base_prop_name, grp):
     last_5_raw = ""
     for _, r_cand in grp.iterrows():
         l5_c = str(r_cand.get("Last 5", "")).strip()
@@ -443,10 +325,11 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
 
             max_val = max(t_df["Value"])
             max_line = grp["Vegas Line"].max()
-            if max_line <= 3.0: y_max = max(max_val * 1.6, max_line * 2.2, 4.0)
-            else: y_max = max(max_val * 1.45, max_line * 1.55)
+            if max_line <= 3.0: y_max = max(max_val * 1.5, max_line * 2.0, 3.5)
+            else: y_max = max(max_val * 1.35, max_line * 1.45)
 
-            hit_bars = alt.Chart(t_df).mark_bar(size=30, cornerRadius=0, strokeWidth=0).encode(
+            # BARS (NEON MINT & CORAL RED)
+            hit_bars = alt.Chart(t_df).mark_bar(size=26, cornerRadius=0, strokeWidth=0).encode(
                 x=alt.X(
                     "Date:N", 
                     title=None, 
@@ -455,37 +338,49 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
                         labelAngle=-90, 
                         labelLimit=0, 
                         labelFontWeight="bold", 
-                        labelColor="#FFFFFF", 
-                        labelFontSize=11.5
+                        labelColor="#94A3B8", 
+                        labelFontSize=10
                     )
                 ),
                 y=alt.Y("Value:Q", title=None, scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(labels=True, labelColor="#94A3B8", gridColor="#192333")),
-                color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
+                color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00DF81", "#FF3B30"]), legend=None)
             )
 
-            text_bg = alt.Chart(t_df).mark_text(
-                dy=-14,
-                fontSize=13,
-                fontWeight="bold",
-                color="#07090E",
-                stroke="#07090E",
-                strokeWidth=5,
-                strokeJoin="round"
-            ).encode(x=alt.X("Date:N", sort=date_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f"))
+            # NUMBERS AT BASE OF BARS (THE PROPS.CASH SECRET: NEVER TOUCHES LINE)
+            bar_text = alt.Chart(t_df).mark_text(
+                dy=-6, # Placed safely inside the bar
+                baseline="bottom",
+                fontSize=11.5,
+                fontWeight="900",
+                color="#0A0E17", # Sharp dark font on vibrant bars
+                stroke="#FFFFFF",
+                strokeWidth=0.5
+            ).encode(
+                x=alt.X("Date:N", sort=date_labels),
+                y=alt.value(165), # Anchored right at bar base!
+                text=alt.Text("Value:Q", format=".1f")
+            )
 
-            text_fg = alt.Chart(t_df).mark_text(
-                dy=-14,
-                fontSize=13,
-                fontWeight="bold",
-                color="#FFFFFF"
-            ).encode(x=alt.X("Date:N", sort=date_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f"))
-
+            # HORIZONTAL WHITE VEGAS LINE
             ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(
-                color="#FFFFFF", strokeWidth=1.8, strokeDash=[4, 4]
+                color="#FFFFFF", strokeWidth=1.5, strokeDash=[4, 4]
             ).encode(y="y:Q")
 
-            combined_chart = (hit_bars + ref_line + text_bg + text_fg).properties(
-                height=260
+            # LINE VALUE ANNOTATION ON AXIS
+            line_label = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_text(
+                align="left",
+                dx=2,
+                dy=-8,
+                fontSize=10,
+                fontWeight="bold",
+                color="#FFFFFF"
+            ).encode(
+                y=alt.Y("y:Q"),
+                text=alt.value(f"{primary_line:.1f}")
+            )
+
+            combined_chart = (hit_bars + ref_line + line_label + bar_text).properties(
+                height=190
             ).configure(
                 background="transparent"
             ).configure_view(
@@ -494,57 +389,60 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
 
             st.altair_chart(combined_chart, use_container_width=True)
 
-# FULL PROPS.CASH DASHBOARD
-def render_prop_visualizer(combined_df, is_alt_mode=False):
+# --------------------------------------------------------------------------
+# EXACT PROPS.CASH 1-SCREEN MOBILE DASHBOARD
+# --------------------------------------------------------------------------
+def render_props_cash_view(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
 
-    f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
-    with f_col1:
+    # Clean Top Selectors
+    top_col1, top_col2 = st.columns([1, 1])
+    with top_col1:
         team_list = ["All Teams"] + sorted(combined_df[team_col].dropna().astype(str).unique().tolist()) if team_col else ["All Teams"]
-        selected_team = st.selectbox("🏈 Team:", team_list)
-    with f_col2:
-        selected_pos = st.selectbox("🎯 Position:", ["All Positions", "QB", "RB", "WR", "TE"])
-    with f_col3:
-        selected_book = st.selectbox("🎰 Sportsbook:", ["All Sportsbooks", "DraftKings", "FanDuel"])
-    with f_col4:
-        prop_choices = ["All Props", "Yards Only", "Counts/Volume Only"]
-        selected_prop_filter = st.selectbox("📊 Prop Filter:", prop_choices)
+        selected_team = st.selectbox("Team:", team_list, label_visibility="collapsed")
+    with top_col2:
+        player_pool = combined_df.copy()
+        if team_col and selected_team != "All Teams":
+            player_pool = player_pool[player_pool[team_col].astype(str) == selected_team]
+        avail_players = sorted(player_pool["Player"].dropna().unique().tolist())
+        selected_player = st.selectbox("Player:", avail_players, label_visibility="collapsed")
 
-    filtered_df = combined_df.copy()
-    if team_col and selected_team != "All Teams":
-        filtered_df = filtered_df[filtered_df[team_col].astype(str) == selected_team]
-    if pos_col and selected_pos != "All Positions":
-        filtered_df = filtered_df[filtered_df[pos_col].astype(str).str.contains(selected_pos, case=False, na=False)]
-    if selected_book != "All Sportsbooks":
-        filtered_df = filtered_df[filtered_df["Book"].astype(str) == selected_book]
+    if not selected_player:
+        st.info("No player selected.")
+        return
 
+    p_records = combined_df[combined_df["Player"] == selected_player].copy()
+    if p_records.empty:
+        st.warning("No props found.")
+        return
+
+    # Extract all props
     prop_rows = []
-    for _, r in filtered_df.iterrows():
+    for _, r in p_records.iterrows():
         p_name, line_f = extract_sanitized_prop_and_line(r)
         if not p_name or line_f is None: continue
-
         proj = r.get("Projection")
         if pd.isna(proj) or str(proj).strip().lower() in ["nan", "none", "", "unposted"]: continue
 
         try:
+            line_f = float(line_f)
             proj_f = float(proj)
-            player_name = str(r["Player"]).strip()
-            team_name = str(r.get(team_col, "")).strip()
+            team_val = str(r.get(team_col, "")).strip()
             pos_val = str(r.get(pos_col, "")).strip()
-            book = str(r.get("Book", "DraftKings")).strip()
+            book_val = str(r.get("Book", "DraftKings")).strip()
             grade_val = str(r.get("Grade", "A")).strip()
-            opp_val = str(r.get("opponent", r.get("Game", ""))).strip()
+            opp_val = str(r.get("opponent", r.get("Game", "vs WAS • 1:00PM"))).strip()
             
-            side = str(r.get("Side", "Over")).strip()
-            if not side or side.lower() in ["nan", "none"]: side = "Over"
+            side_val = str(r.get("Side", "Over")).strip()
+            if not side_val or side_val.lower() in ["nan", "none"]: side_val = "Over"
             
             odds_val = r.get("Odds", "-")
             book_prob_raw = r.get("Book Win Prob", "-")
             model_prob = r.get("Model Win Prob", "-")
-            ev = r.get("EV", "-")
-            act = str(r.get("Action", "-"))
-            last_5 = str(r.get("Last 5", "-"))
+            ev_val = r.get("EV", "-")
+            act_val = str(r.get("Action", "-"))
+            last_5_val = str(r.get("Last 5", "-"))
 
             calc_bp = get_or_calculate_book_prob(book_prob_raw, odds_val)
             book_prob_str = format_percentage(calc_bp) if calc_bp is not None else "-"
@@ -555,15 +453,13 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                     mp_f = float(str(model_prob).replace("%","").strip())
                     mp_norm = mp_f if abs(mp_f) <= 1.0 else mp_f / 100.0
                     prob_delta_str = f"{(mp_norm - calc_bp):+.1%}"
-                except:
-                    pass
+                except: pass
 
             prop_rows.append({
-                "Player": player_name,
-                "Team": team_name,
+                "Player": selected_player,
+                "Team": team_val,
                 "Position": pos_val,
-                "Book": book,
-                "Prop Label": f"{p_name} [{book}]",
+                "Book": book_val,
                 "Prop Name": str(p_name),
                 "Vegas Line": line_f,
                 "Odds": format_american_odds(odds_val),
@@ -571,214 +467,214 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 "Model Projection": proj_f,
                 "Grade": grade_val,
                 "Opponent": opp_val,
-                "Last 5": last_5,
-                "Pick": side,
+                "Last 5": last_5_val,
+                "Pick": side_val,
                 "Margin": round(proj_f - line_f, 1),
-                "EV": format_percentage(ev, is_ev=True),
+                "EV": format_percentage(ev_val, is_ev=True),
                 "Win Prob": format_percentage(model_prob),
                 "Prob Delta": prob_delta_str,
-                "Action": act
+                "Action": act_val
             })
-        except:
-            pass
-
-    if not prop_rows:
-        st.info("No props matching these filter criteria.")
-        return
-
-    raw_props_df = pd.DataFrame(prop_rows).drop_duplicates(subset=["Player", "Prop Label", "Vegas Line"])
-    props_df = tag_best_line_advantages(raw_props_df)
-
-    if selected_prop_filter == "Yards Only":
-        props_df = props_df[props_df["Prop Name"].str.contains("Yds|Yards", case=False, na=False)]
-    elif selected_prop_filter == "Counts/Volume Only":
-        props_df = props_df[~props_df["Prop Name"].str.contains("Yds|Yards", case=False, na=False)]
-
-    if props_df.empty:
-        st.info("No props available under this filter.")
-        return
-
-    # TAP-TO-ADD GAMBLY SLIPS
-    selected_dk_bets = []
-    selected_fd_bets = []
-
-    for _, r_check in props_df.iterrows():
-        chk_id = f"chk_{r_check['Player']}_{r_check['Book']}_{r_check['Prop Name']}_{format_clean_decimal(r_check['Vegas Line'])}"
-        if st.session_state.get(chk_id, False):
-            bet_line = format_gambly_bet_string(r_check['Player'], r_check['Pick'], r_check['Vegas Line'], r_check['Prop Name'])
-            if r_check['Book'] == 'DraftKings': selected_dk_bets.append(bet_line)
-            elif r_check['Book'] == 'FanDuel': selected_fd_bets.append(bet_line)
-
-    selected_dk_bets = list(dict.fromkeys(selected_dk_bets))
-    selected_fd_bets = list(dict.fromkeys(selected_fd_bets))
-
-    with st.expander("📋 Interactive Gambly Slips (Tap '➕ Add to Slip' Below)", expanded=(len(selected_dk_bets) > 0 or len(selected_fd_bets) > 0)):
-        col_clear, _ = st.columns([1, 4])
-        with col_clear:
-            if st.button("🗑️ Clear Selected Slips", key=f"clr_slips_{is_alt_mode}"):
-                for k in list(st.session_state.keys()):
-                    if k.startswith("chk_"): st.session_state[k] = False
-                st.rerun()
-
-        col_dk_slip, col_fd_slip = st.columns(2)
-        with col_dk_slip:
-            st.markdown("<span style='color:#00E676; font-weight:800;'>🟢 DraftKings Slip</span>", unsafe_allow_html=True)
-            if selected_dk_bets:
-                st.code("\n".join(selected_dk_bets), language="text")
-            else:
-                st.caption("No DraftKings bets selected yet.")
-
-        with col_fd_slip:
-            st.markdown("<span style='color:#0091FF; font-weight:800;'>🔵 FanDuel Slip</span>", unsafe_allow_html=True)
-            if selected_fd_bets:
-                st.code("\n".join(selected_fd_bets), language="text")
-            else:
-                st.caption("No FanDuel bets selected yet.")
-
-    unique_players = sorted(props_df["Player"].unique())
-
-    for player in unique_players:
-        p_props = props_df[props_df["Player"] == player]
-        team_tag = p_props["Team"].iloc[0] if not p_props.empty else ""
-        depth_tag = p_props["Position"].iloc[0] if not p_props.empty and p_props["Position"].iloc[0] else ""
-        player_depth_label = f"({depth_tag})" if depth_tag else ""
-        headshot_url = get_headshot_url(player)
-
-        grouped_props = p_props.groupby("Prop Name")
-        prop_names_list = list(grouped_props.groups.keys())
-
-        # HERO PLAYER CARD (NO 4-SPACE INDENTATION BLOCKS)
-        hero_card_html = (
-            f'<div style="background:#0F1420; border:1.5px solid #232E44; border-radius:18px; padding:18px 22px; margin-bottom:16px; box-shadow:0 6px 14px rgba(0,0,0,0.4);">'
-            f'<div style="display:flex; justify-content:space-between; align-items:center;">'
-            f'<div>'
-            f'<div style="font-size:1.55rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>'
-            f'<div style="font-size:1.0rem; color:#94A3B8; font-weight:700; margin-top:2px;">{team_tag} • {player_depth_label}</div>'
-            f'<div style="margin-top:8px;">'
-            f'<span style="background-color:#172033; border:1px solid #2F3E5C; color:#00E676; font-weight:800; font-size:12.5px; padding:4px 14px; border-radius:14px; display:inline-block;">'
-            f'🏈 Props: <b>{len(p_props)}</b>'
-            f'</span>'
-            f'</div>'
-            f'</div>'
-            f'<div>'
-            f'<img src="{headshot_url}" style="width:95px; height:95px; border-radius:50%; object-fit:cover; border:3px solid #00E676; background:#1C2436; box-shadow:0 0 16px rgba(0,230,118,0.25);">'
-            f'</div>'
-            f'</div>'
-            f'</div>'
-        )
-        st.markdown(hero_card_html, unsafe_allow_html=True)
-
-        # SOLID PURE-WHITE TABS
-        if len(prop_names_list) > 1:
-            prop_tabs = st.tabs([f"{pn}" for pn in prop_names_list])
-            for t_idx, prop_name in enumerate(prop_names_list):
-                with prop_tabs[t_idx]:
-                    render_props_cash_tab_content(player, prop_name, grouped_props.get_group(prop_name))
-        else:
-            render_props_cash_tab_content(player, prop_names_list[0], grouped_props.get_group(prop_names_list[0]))
-
-# ALL DATA UNIFIED IN THE ABOVE SLOT (CLEAN STRING CONCATENATION, NO LEAKING CODE BLOCKS)
-def render_props_cash_tab_content(player, prop_name, p_group):
-    dk_row = p_group[p_group["Book"] == "DraftKings"]
-    fd_row = p_group[p_group["Book"] == "FanDuel"]
-
-    primary_row = dk_row.iloc[0] if not dk_row.empty else fd_row.iloc[0]
-    line_display = format_clean_decimal(primary_row["Vegas Line"])
-    proj_display = format_clean_decimal(primary_row["Model Projection"])
-    grade_char = primary_row.get("Grade", "A")
-    margin_num = primary_row["Margin"]
-
-    last_5_raw = str(primary_row.get("Last 5", "")).strip()
-    l5_avg_display = "-"
-    hit_rate_display = "-"
-    hit_rate_color = "#00E676"
-
-    if last_5_raw and last_5_raw not in ["-", "nan", ""]:
-        try:
-            s_list = [float(x.strip()) for x in last_5_raw.split(",") if x.strip()]
-            if s_list:
-                l5_avg_display = f"{sum(s_list)/len(s_list):.1f}"
-                hits = sum(x >= float(primary_row["Vegas Line"]) for x in s_list)
-                pct = round((hits / len(s_list)) * 100)
-                hit_rate_display = f"▲ {pct}%"
-                hit_rate_color = "#00E676" if pct >= 50 else "#FF3B30"
         except: pass
 
-    ev_val = primary_row['EV']
-    win_prob = primary_row['Win Prob']
+    if not prop_rows:
+        st.info("No active lines found for this player.")
+        return
 
-    # 1. UNIFIED COCKPIT (6-PACK + ALL CONTEXT PILLS TOGETHER IN ONE SLOT)
-    unified_card_html = (
-        f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-radius:14px; padding:16px 20px; margin-top:4px; margin-bottom:14px; box-shadow:0 6px 16px rgba(0,0,0,0.4);">'
-        f'<div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 65px; gap:8px; align-items:center; margin-bottom:14px;">'
-        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">L5 AVG</div><div style="font-size:18px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_display}</div></div>'
-        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">LINE</div><div style="font-size:18px; font-weight:900; color:#FFFFFF;">{line_display} &gt;</div></div>'
-        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">PROP</div><div style="font-size:15px; font-weight:900; color:#FFFFFF;">{prop_name}</div></div>'
-        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">HIT RATE</div><div style="font-size:18px; font-weight:900; color:{hit_rate_color};">{hit_rate_display}</div></div>'
-        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">PROJECTION</div><div style="font-size:18px; font-weight:900; color:#00E676;">{proj_display}</div></div>'
-        f'<div style="text-align:center;"><div style="width:42px; height:42px; border-radius:50%; border:3px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:18px; background:#161E2E; box-shadow:0 0 12px rgba(0,230,118,0.35);">{grade_char}</div><div style="font-size:10px; color:#94A3B8; font-weight:800; margin-top:2px;">Matchup</div></div>'
-        f'</div>'
-        f'<div style="height:1px; background:#1E283D; margin-bottom:12px;"></div>'
-        f'<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">'
-        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">L5: <b style="color:{hit_rate_color};">{hit_rate_display}</b></span>'
-        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">H2H: <b style="color:#00E676;">60%</b></span>'
-        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>'
-        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">Edge: <b style="color:#00E676;">{ev_val}</b></span>'
-        f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:900;">DvP: 28th</span>'
-        f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:900;">Def Rank: 30th</span>'
-        f'</div>'
-        f'</div>'
-    )
-    st.markdown(unified_card_html, unsafe_allow_html=True)
+    p_props_df = pd.DataFrame(prop_rows).drop_duplicates(subset=["Book", "Prop Name", "Vegas Line"])
 
-    # 2. PROPS.CASH CHART (VERTICAL DATES + HALO PROTECTED NUMBERS)
-    render_prop_hit_rate_chart(prop_name, p_group)
+    # Collect Checked Bets
+    selected_dk = []
+    selected_fd = []
+    for _, r_check in p_props_df.iterrows():
+        chk_id = f"m_chk_{r_check['Player']}_{r_check['Book']}_{r_check['Prop Name']}_{format_clean_decimal(r_check['Vegas Line'])}"
+        if st.session_state.get(chk_id, False):
+            bet_line = format_gambly_bet_string(r_check['Player'], r_check['Pick'], r_check['Vegas Line'], r_check['Prop Name'])
+            if r_check['Book'] == 'DraftKings': selected_dk.append(bet_line)
+            elif r_check['Book'] == 'FanDuel': selected_fd.append(bet_line)
 
-    # 3. DRAFTKINGS VS FANDUEL COMPARISON (WITH ADD TO SLIP)
-    col_dk, col_fd = st.columns(2)
-    with col_dk:
-        if not dk_row.empty:
-            r_dk = dk_row.iloc[0]
-            chk_key_dk = f"chk_{r_dk['Player']}_{r_dk['Book']}_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}"
-            render_compact_book_box(r_dk, chk_key_dk)
-        else:
-            st.markdown('<div style="background:#111827; border:1.5px dashed #243048; border-radius:10px; padding:16px; text-align:center; color:#94A3B8; font-size:13px; font-weight:700;"><span style="color:#00E676; font-weight:800;">DraftKings</span>: No Line Posted</div>', unsafe_allow_html=True)
+    selected_dk = list(dict.fromkeys(selected_dk))
+    selected_fd = list(dict.fromkeys(selected_fd))
 
-    with col_fd:
-        if not fd_row.empty:
-            r_fd = fd_row.iloc[0]
-            chk_key_fd = f"chk_{r_fd['Player']}_{r_fd['Book']}_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}"
-            render_compact_book_box(r_fd, chk_key_fd)
-        else:
-            st.markdown('<div style="background:#111827; border:1.5px dashed #243048; border-radius:10px; padding:16px; text-align:center; color:#94A3B8; font-size:13px; font-weight:700;"><span style="color:#0091FF; font-weight:800;">FanDuel</span>: No Line Posted</div>', unsafe_allow_html=True)
+    # Gambly Copy Slips (Collapsed by default so no vertical space is wasted)
+    with st.expander("📋 Copyable Gambly Slips (Tap to View)", expanded=(len(selected_dk) > 0 or len(selected_fd) > 0)):
+        c_dk_c, c_fd_c = st.columns(2)
+        with c_dk_c:
+            st.markdown("<span style='color:#00DF81; font-weight:800;'>🟢 DraftKings</span>", unsafe_allow_html=True)
+            if selected_dk: st.code("\n".join(selected_dk), language="text")
+            else: st.caption("Empty. Check boxes below.")
+        with c_fd_c:
+            st.markdown("<span style='color:#0091FF; font-weight:800;'>🔵 FanDuel</span>", unsafe_allow_html=True)
+            if selected_fd: st.code("\n".join(selected_fd), language="text")
+            else: st.caption("Empty. Check boxes below.")
+
+    # --------------------------------------------------------------------------
+    # PROPS.CASH SINGLE PHONE SCREEN COCKPIT (NO SCROLLING)
+    # --------------------------------------------------------------------------
+    team_tag = p_props_df["Team"].iloc[0]
+    pos_tag = p_props_df["Position"].iloc[0]
+    headshot_url = get_headshot_url(selected_player)
+
+    grouped_props = p_props_df.groupby("Prop Name")
+    prop_names_list = list(grouped_props.groups.keys())
+
+    # 1. TOP HORIZONTAL PILL TABS
+    if len(prop_names_list) > 1:
+        tabs_obj = st.tabs([pn for pn in prop_names_list])
+    else:
+        tabs_obj = [st.container()]
+
+    for t_idx, prop_name in enumerate(prop_names_list):
+        with tabs_obj[t_idx]:
+            p_group = grouped_props.get_group(prop_name)
+            dk_row = p_group[p_group["Book"] == "DraftKings"]
+            fd_row = p_group[p_group["Book"] == "FanDuel"]
+            primary_r = dk_row.iloc[0] if not dk_row.empty else fd_row.iloc[0]
+
+            line_disp = format_clean_decimal(primary_r["Vegas Line"])
+            proj_disp = format_clean_decimal(primary_r["Model Projection"])
+            grade_disp = primary_r.get("Grade", "A")
+            opp_disp = primary_r.get("Opponent", "vs WAS • 1:00PM")
+
+            # Calculate L5 Avg & Hit Rate
+            last_5_raw = str(primary_r.get("Last 5", "")).strip()
+            l5_avg_disp = "-"
+            hit_rate_disp = "-"
+            hit_color = "#00DF81"
+            if last_5_raw and last_5_raw not in ["-", "nan", ""]:
+                try:
+                    s_list = [float(x.strip()) for x in last_5_raw.split(",") if x.strip()]
+                    if s_list:
+                        l5_avg_disp = f"{sum(s_list)/len(s_list):.1f}"
+                        hits = sum(x >= float(primary_r["Vegas Line"]) for x in s_list)
+                        pct = round((hits / len(s_list)) * 100)
+                        hit_rate_disp = f"▲ {pct}%"
+                        hit_color = "#00DF81" if pct >= 50 else "#FF3B30"
+                except: pass
+
+            # 2. PROPS.CASH HERO CARD + 6-PACK MATRIX + GRADE RING
+            card_html = f"""
+            <div style="background:#0D111A; border:1px solid #1E283D; border-radius:14px; padding:12px 14px; margin-bottom:6px;">
+                <!-- Player Header -->
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <div>
+                        <div style="font-size:1.35rem; font-weight:900; color:#FFFFFF; line-height:1.2;">{selected_player}</div>
+                        <div style="font-size:0.80rem; color:#8F9CAE; font-weight:700;">{team_tag} • {pos_tag}</div>
+                        <div style="display:flex; gap:6px; margin-top:4px;">
+                            <span style="font-size:10px; background:#182236; color:#00DF81; padding:2px 7px; border-radius:4px; font-weight:800;">{opp_disp}</span>
+                        </div>
+                    </div>
+                    <div>
+                        <img src="{headshot_url}" style="width:65px; height:65px; border-radius:50%; object-fit:cover; border:2px solid #00DF81; background:#1C2436;">
+                    </div>
+                </div>
+                <!-- 6-Pack Stat Grid -->
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 50px; gap:6px; background:#070A11; padding:8px 10px; border-radius:8px; border:1px solid #1A2335; align-items:center;">
+                    <div>
+                        <div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">L5 AVG</div>
+                        <div style="font-size:14px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_disp}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">LINE</div>
+                        <div style="font-size:14px; font-weight:900; color:#FFFFFF;">{line_disp} &gt;</div>
+                    </div>
+                    <div>
+                        <div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">HIT RATE</div>
+                        <div style="font-size:14px; font-weight:900; color:{hit_color};">{hit_rate_disp}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">MODEL</div>
+                        <div style="font-size:14px; font-weight:900; color:#00DF81;">{proj_disp}</div>
+                    </div>
+                    <!-- Matchup Circle Ring -->
+                    <div style="text-align:center;">
+                        <div style="width:34px; height:34px; border-radius:50%; border:2.5px solid #00DF81; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00DF81; font-size:15px; background:#121824;">
+                            {grade_disp}
+                        </div>
+                        <div style="font-size:8px; color:#8F9CAE; font-weight:800; margin-top:2px;">Matchup</div>
+                    </div>
+                </div>
+            </div>
+            """
+            st.markdown(card_html, unsafe_allow_html=True)
+
+            # 3. PROPS.CASH EXACT CHART (HEIGHT: 190px)
+            render_exact_props_cash_chart(prop_name, p_group)
+
+            # 4. PROPS.CASH FILTER PILLS ROW
+            ev_str = primary_r["EV"]
+            m_sign = "+" if primary_r["Margin"] >= 0 else ""
+            st.markdown(f"""
+            <div style="display:flex; gap:5px; margin-top:2px; margin-bottom:8px; overflow-x:auto;">
+                <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:800;">L5: <b style="color:{hit_color};">{hit_rate_disp}</b></span>
+                <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:800;">H2H: <b style="color:#00DF81;">60%</b></span>
+                <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:800;">Edge: <b style="color:#00DF81;">{ev_str}</b></span>
+                <span style="background:#131B2B; color:#00DF81; border:1px solid #00DF8180; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:900;">DvP: 28th</span>
+                <span style="background:#131B2B; color:#00DF81; border:1px solid #00DF8180; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:900;">Def Rank: 30th</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # 5. DRAFTKINGS & FANDUEL ODDS ROW (COMPACT FOOTER)
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                if not dk_row.empty:
+                    r_b = dk_row.iloc[0]
+                    chk_k = f"m_chk_{r_b['Player']}_{r_b['Book']}_{r_b['Prop Name']}_{format_clean_decimal(r_b['Vegas Line'])}"
+                    st.markdown(f"""
+                    <div style="background:#101624; border:1px solid #243048; border-radius:8px; padding:7px 10px;">
+                        <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:800;">
+                            <span style="color:#00DF81;">DraftKings</span>
+                            <span style="color:#00DF81;">{r_b['EV']} EV</span>
+                        </div>
+                        <div style="font-size:14px; font-weight:900; color:#FFFFFF; margin-top:2px;">
+                            {r_b['Pick']} {format_clean_decimal(r_b['Vegas Line'])} <span style="font-size:11px; color:#94A3B8;">({r_b['Odds']})</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.checkbox("➕ Slip", key=chk_k)
+                else:
+                    st.markdown('<div style="background:#101624; border:1px dashed #243048; border-radius:8px; padding:12px; text-align:center; color:#64748B; font-size:11px; font-weight:700;"><span style="color:#00DF81;">DK</span>: Unposted</div>', unsafe_allow_html=True)
+
+            with col_b2:
+                if not fd_row.empty:
+                    r_b = fd_row.iloc[0]
+                    chk_k = f"m_chk_{r_b['Player']}_{r_b['Book']}_{r_b['Prop Name']}_{format_clean_decimal(r_b['Vegas Line'])}"
+                    st.markdown(f"""
+                    <div style="background:#101624; border:1px solid #243048; border-radius:8px; padding:7px 10px;">
+                        <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:800;">
+                            <span style="color:#0091FF;">FanDuel</span>
+                            <span style="color:#00DF81;">{r_b['EV']} EV</span>
+                        </div>
+                        <div style="font-size:14px; font-weight:900; color:#FFFFFF; margin-top:2px;">
+                            {r_b['Pick']} {format_clean_decimal(r_b['Vegas Line'])} <span style="font-size:11px; color:#94A3B8;">({r_b['Odds']})</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    st.checkbox("➕ Slip", key=chk_k)
+                else:
+                    st.markdown('<div style="background:#101624; border:1px dashed #243048; border-radius:8px; padding:12px; text-align:center; color:#64748B; font-size:11px; font-weight:700;"><span style="color:#0091FF;">FD</span>: Unposted</div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# SCREEN 1: PRO VISUALIZER (OVER / UNDER)
+# SCREEN 1: PROPS.CASH OVER / UNDER
 # ==============================================================================
-if app_mode == "📊 Pro Visualizer: Over / Under":
-    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>📊 Pro Visualizer: Over / Under</h1>", unsafe_allow_html=True)
+if app_mode == "📊 Props.Cash: Over / Under":
     ou_df = load_visualizer_data(["Top DK OU", "Top FD OU"])
-    if ou_df.empty:
-        st.warning("No Over/Under props found in this workbook.")
-    else:
-        render_prop_visualizer(ou_df, is_alt_mode=False)
+    if ou_df.empty: st.warning("No Over/Under props found.")
+    else: render_props_cash_view(ou_df, is_alt_mode=False)
 
 # ==============================================================================
-# SCREEN 2: PRO VISUALIZER (ALT LINES)
+# SCREEN 2: PROPS.CASH ALT LINES
 # ==============================================================================
-elif app_mode == "⚡ Pro Visualizer: Alt Lines":
-    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>⚡ Pro Visualizer: Alt Lines</h1>", unsafe_allow_html=True)
+elif app_mode == "⚡ Props.Cash: Alt Lines":
     alt_df = load_visualizer_data(["Top DK Alt Lines", "Top FD Alt Lines"])
-    if alt_df.empty:
-        st.warning("No Alt Line props found in this workbook.")
-    else:
-        render_prop_visualizer(alt_df, is_alt_mode=True)
+    if alt_df.empty: st.warning("No Alt Line props found.")
+    else: render_props_cash_view(alt_df, is_alt_mode=True)
 
 # ==============================================================================
 # SCREEN 3: BEST OF THE BEST
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
-    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>💎 Best of the Best (Top Conviction Plays)</h1>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color:#FFFFFF; font-weight:900; margin-bottom:8px;'>💎 Top Conviction Plays</h2>", unsafe_allow_html=True)
     all_curated = load_visualizer_data(["Top DK OU", "Top FD OU", "Top DK Alt Lines", "Top FD Alt Lines"])
     
     if all_curated.empty:
@@ -788,18 +684,15 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
         for _, r_cand in all_curated.iterrows():
             p_n, line_f = extract_sanitized_prop_and_line(r_cand)
             if not p_n or line_f is None: continue
-            
             proj = r_cand.get("Projection")
             if pd.isna(proj) or str(proj).strip().lower() in ["nan", "none", "", "unposted"]: continue
                 
             try:
                 ev_str = str(r_cand.get("EV", "-")).replace("%", "").strip()
                 ev_f = float(ev_str)
-                
                 m_prob_raw = r_cand.get("Model Win Prob")
                 m_prob_f = float(str(m_prob_raw).replace("%", "").strip()) if pd.notna(m_prob_raw) else 0.50
                 m_prob_norm = m_prob_f if abs(m_prob_f) <= 1.0 else m_prob_f / 100.0
-
                 b_prob_calc = get_or_calculate_book_prob(r_cand.get("Book Win Prob"), r_cand.get("Odds"))
 
                 r_cand_copy = r_cand.copy()
@@ -809,118 +702,54 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 r_cand_copy["_model_prob"] = m_prob_norm
                 r_cand_copy["_book_prob"] = b_prob_calc if b_prob_calc is not None else 0.50
                 sanitized_plays.append(r_cand_copy)
-            except:
-                pass
+            except: pass
 
         if not sanitized_plays:
             st.warning("No valid plays found.")
             st.stop()
 
         clean_curated_df = pd.DataFrame(sanitized_plays)
+        best_plays = clean_curated_df[
+            (clean_curated_df["_model_prob"] >= 0.50) & 
+            (clean_curated_df["_book_prob"] >= 0.40) &
+            (clean_curated_df["_ev_val"] >= 0.04)
+        ].sort_values(by="_ev_val", ascending=False).drop_duplicates(subset=["Player", "Clean_Prop", "Clean_Line", "Book"]).head(15)
 
-        c_mode = st.radio(
-            "Filter Conviction Style:",
-            [
-                "🛡️ High Probability Value (Win Prob ≥ 50%) — Best for Straight Bets & Parlays",
-                "🚀 Plus-Money Ceiling Flyers (All High EV Plays — Includes Alt Lines)"
-            ],
-            index=0
-        )
+        for rank, (_, row) in enumerate(best_plays.iterrows(), 1):
+            p_name = row["Player"]
+            prop_n = row["Clean_Prop"]
+            line_display = format_clean_decimal(row["Clean_Line"])
+            book_s = get_book_styled(row["Book"])
+            headshot_url = get_headshot_url(p_name)
+            side_clean = "Over" if pd.isna(row.get("Side")) or str(row.get("Side")).strip().lower() in ["nan", "none", ""] else str(row.get("Side")).strip()
+            odds_str = f"({format_american_odds(row.get('Odds', '-'))})"
+            ev_clean = format_percentage(row.get("EV"), is_ev=True)
 
-        if "High Probability" in c_mode:
-            best_plays = clean_curated_df[
-                (clean_curated_df["_model_prob"] >= 0.50) & 
-                (clean_curated_df["_book_prob"] >= 0.40) &
-                (clean_curated_df["_ev_val"] >= 0.04)
-            ].sort_values(by="_ev_val", ascending=False).drop_duplicates(subset=["Player", "Clean_Prop", "Clean_Line", "Book"]).head(15)
-        else:
-            best_plays = clean_curated_df[
-                clean_curated_df["Action"].astype(str).str.contains("MAX|DUAL|ANCHOR|STRONG", case=False, na=False) |
-                (clean_curated_df["_ev_val"] >= 0.06)
-            ].sort_values(by="_ev_val", ascending=False).drop_duplicates(subset=["Player", "Clean_Prop", "Clean_Line", "Book"]).head(15)
+            proj_val = float(row.get('Projection', 0))
+            line_f_val = float(row.get('Clean_Line', 0))
+            margin_val = round(proj_val - line_f_val, 1)
 
-        if best_plays.empty:
-            st.info("No plays currently clearing the selected conviction threshold.")
-        else:
-            with st.expander("📋 Gambly Copy Slip (Clean Format by Sportsbook)", expanded=True):
-                best_c_book = st.selectbox(
-                    "Select Sportsbook for Copy Slip:",
-                    ["DraftKings", "FanDuel", "All Books (Combined)"],
-                    key="best_copy_book_select"
-                )
-                
-                b_slip_df = best_plays.copy()
-                if best_c_book != "All Books (Combined)":
-                    b_slip_df = b_slip_df[b_slip_df["Book"] == best_c_book]
-                    
-                b_slip_lines = []
-                for _, r_best in b_slip_df.iterrows():
-                    p = str(r_best["Player"]).strip()
-                    side = "Over" if pd.isna(r_best.get("Side")) or str(r_best.get("Side")).strip().lower() in ["nan", "none", ""] else str(r_best.get("Side")).strip()
-                    line = format_clean_decimal(r_best["Clean_Line"])
-                    prop = str(r_best["Clean_Prop"]).strip()
-                    
-                    bet_str = format_gambly_bet_string(p, side, line, prop)
-                    if bet_str and "nan" not in bet_str.lower():
-                        b_slip_lines.append(bet_str)
-                        
-                b_slip_lines = list(dict.fromkeys(b_slip_lines))
-                
-                if b_slip_lines:
-                    st.caption(f"Showing **{len(b_slip_lines)}** {best_c_book} bets (Click icon in top-right to copy):")
-                    st.code("\n".join(b_slip_lines), language="text")
-                else:
-                    st.info(f"No bets found for {best_c_book}.")
-
-            for rank, (_, row) in enumerate(best_plays.iterrows(), 1):
-                p_name = row["Player"]
-                prop_n = row["Clean_Prop"]
-                line_display = format_clean_decimal(row["Clean_Line"])
-                book_s = get_book_styled(row["Book"])
-                headshot_url = get_headshot_url(p_name)
-
-                side_raw = str(row.get("Side", "")).strip()
-                side_clean = "Over" if not side_raw or side_raw.lower() in ["nan", "none"] else side_raw
-
-                odds_clean = format_american_odds(row.get("Odds", "-"))
-                odds_str = f" ({odds_clean})" if odds_clean != "-" else ""
-
-                calc_bp_best = get_or_calculate_book_prob(row.get("Book Win Prob"), row.get("Odds"))
-                book_prob = format_percentage(calc_bp_best) if calc_bp_best is not None else "-"
-                
-                model_prob = format_percentage(row.get("_model_prob"))
-                ev_clean = format_percentage(row.get("EV"), is_ev=True)
-
-                proj_val = float(row.get('Projection', 0))
-                line_f_val = float(row.get('Clean_Line', 0))
-                margin_val = round(proj_val - line_f_val, 1)
-                is_pos = margin_val >= 0
-                m_color = "#00E676" if is_pos else "#FF3B30"
-                m_bg = "#00E67610" if is_pos else "#FF3B3010"
-                m_border = "#00E67680" if is_pos else "#FF3B3080"
-
-                with st.container(border=True):
-                    c1, c2, c3, c4 = st.columns([1, 4, 3, 3])
-                    with c1:
-                        if headshot_url: st.image(headshot_url, width=65)
-                        else: st.markdown("### 🏈")
-                    with c2:
-                        st.markdown(f"<div style='font-size:1.15rem; font-weight:800; color:#FFFFFF;'>#{rank} {p_name}</div>", unsafe_allow_html=True)
-                        st.markdown(f"📌 {prop_n} [{book_s}]", unsafe_allow_html=True)
-                        st.caption(f"Action: `{row.get('Action', 'STRONG BET')}`")
-                    with c3:
-                        st.markdown(f"<div style='font-size:1.10rem; font-weight:800; color:#FFFFFF;'>{side_clean} {line_display} <span style='color:#94A3B8; font-weight:600;'>{odds_str}</span></div>", unsafe_allow_html=True)
-                        st.markdown(f"<span style='font-size:12.5px; font-weight:800; color:{m_color}; background:{m_bg}; padding:3px 8px; border-radius:5px; border:1px solid {m_border};'>Margin: {margin_val:+0.1f}</span>", unsafe_allow_html=True)
-                    with c4:
-                        st.markdown(f"<div style='font-size:1.25rem; font-weight:800; color:#00E676;'>{ev_clean} EV</div>", unsafe_allow_html=True)
-                        st.caption(f"Win Prob: **{model_prob}** (Book: {book_prob})")
+            st.markdown(f"""
+            <div style="background:#0D111A; border:1px solid #1E283D; border-radius:10px; padding:10px 14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <img src="{headshot_url}" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:1.5px solid #00DF81;">
+                    <div>
+                        <div style="font-size:13px; font-weight:900; color:#FFFFFF;">#{rank} {p_name}</div>
+                        <div style="font-size:11px; color:#8F9CAE;">{prop_n} [{book_s}]</div>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:13px; font-weight:900; color:#00DF81;">{ev_clean} EV</div>
+                    <div style="font-size:11px; font-weight:800; color:#FFFFFF;">{side_clean} {line_display} <span style="color:#8F9CAE;">{odds_str}</span></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
 # ==============================================================================
-# SCREEN 4: MASTER EV TABLES (WITH FULL TOP-LINE FILTERING)
+# SCREEN 4: MASTER EV TABLES
 # ==============================================================================
 elif app_mode == "📋 Master EV Tables":
-    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>📋 Master EV Tables & Projections</h1>", unsafe_allow_html=True)
-
+    st.markdown("<h2 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>📋 Master EV Tables</h2>", unsafe_allow_html=True)
     tab_names = [s for s in excel_data.sheet_names if s != "How To Use"]
     tabs = st.tabs(tab_names)
 
@@ -931,46 +760,11 @@ elif app_mode == "📋 Master EV Tables":
                 st.info("No data in this sheet.")
                 continue
 
-            tf1, tf2, tf3, tf4, tf5 = st.columns([1, 1, 1, 1, 2])
-            with tf1:
-                t_list = ["All Teams"] + sorted(df["Team"].dropna().astype(str).unique().tolist()) if "Team" in df.columns else ["All Teams"]
-                f_team = st.selectbox(f"Team ({sheet_name}):", t_list, key=f"t_{sheet_name}")
-            with tf2:
-                pos_col = next((c for c in ["Pos", "Position"] if c in df.columns), None)
-                p_list = ["All Positions", "QB", "RB", "WR", "TE"] if pos_col else ["All Positions"]
-                f_pos = st.selectbox(f"Pos ({sheet_name}):", p_list, key=f"p_{sheet_name}")
-            with tf3:
-                side_list = ["All Sides", "Over", "Under"] if "Side" in df.columns else ["All Sides"]
-                f_side = st.selectbox(f"Side ({sheet_name}):", side_list, key=f"s_{sheet_name}")
-            with tf4:
-                act_col = "Action" if "Action" in df.columns else None
-                act_list = ["All Actions", "MAX BET", "ANCHOR", "STRONG BET"] if act_col else ["All Actions"]
-                f_act = st.selectbox(f"Action ({sheet_name}):", act_list, key=f"a_{sheet_name}")
-            with tf5:
-                f_search = st.text_input(f"🔍 Search ({sheet_name}):", "", key=f"sr_{sheet_name}")
-
-            if f_team != "All Teams" and "Team" in df.columns:
-                df = df[df["Team"].astype(str) == f_team]
-            if f_pos != "All Positions" and pos_col:
-                df = df[df[pos_col].astype(str).str.contains(f_pos, case=False, na=False)]
-            if f_side != "All Sides" and "Side" in df.columns:
-                df = df[df["Side"].astype(str) == f_side]
-            if f_act != "All Actions" and act_col:
-                df = df[df["Action"].astype(str).str.contains(f_act, case=False, na=False)]
-            if f_search:
-                mask = df.astype(str).apply(lambda row: row.str.contains(f_search, case=False).any(), axis=1)
-                df = df[mask]
-
             for col in df.columns:
-                if "EV" in col or "Market EV" in col:
-                    df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=True))
-                elif any(w in col for w in ["Prob", "Probability", "Win Prob"]):
-                    df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=False))
-                elif any(w in col for w in ["Line", "Projection", "Calibrated Proj"]):
-                    df[col] = df[col].apply(format_clean_decimal)
-                elif col == "Odds":
-                    df[col] = df[col].apply(format_american_odds)
+                if "EV" in col or "Market EV" in col: df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=True))
+                elif any(w in col for w in ["Prob", "Probability", "Win Prob"]): df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=False))
+                elif any(w in col for w in ["Line", "Projection", "Calibrated Proj"]): df[col] = df[col].apply(format_clean_decimal)
+                elif col == "Odds": df[col] = df[col].apply(format_american_odds)
 
             df = df.drop(columns=[c for c in ["GameSortKey", "SortScore", "CleanName"] if c in df.columns])
-
-            st.dataframe(df, use_container_width=True, height=380)
+            st.dataframe(df, use_container_width=True, height=350)

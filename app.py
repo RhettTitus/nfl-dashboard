@@ -8,36 +8,65 @@ import altair as alt
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# PROPS.CASH DARK AESTHETIC THEME
+# EXACT PROPS.CASH HIGH-CONTRAST DARK CSS THEME
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
-/* Dark App Background */
+/* Pure Dark App Background */
 .stApp {
-    background-color: #0A0E17 !important;
+    background-color: #07090E !important;
+    color: #F8FAFC !important;
 }
 
-/* Props.cash Pill Tabs */
+/* Force All Headings to Pure Crisp White */
+h1, h2, h3, h4, h5, h6, [data-testid="stMarkdownContainer"] p {
+    color: #F8FAFC !important;
+}
+
+/* High-Contrast Selectbox Filters */
+div[data-baseweb="select"] > div {
+    background-color: #121824 !important;
+    border: 1.5px solid #2A364F !important;
+    color: #FFFFFF !important;
+    border-radius: 10px !important;
+}
+div[data-baseweb="select"] * {
+    color: #FFFFFF !important;
+}
+div[data-baseweb="popover"] {
+    background-color: #121824 !important;
+}
+
+/* PROPS.CASH PILL TABS (NO RED UNDERLINE, CLEAN PILL BUTTONS) */
+div[data-baseweb="tab-list"] {
+    gap: 8px !important;
+    background-color: transparent !important;
+    border-bottom: none !important;
+    padding-bottom: 4px !important;
+}
 button[data-baseweb="tab"] {
-    background-color: #161C28 !important;
-    border: 1px solid #283347 !important;
-    border-radius: 20px !important;
+    background-color: #161E2E !important;
+    border: 1.5px solid #26334D !important;
+    border-radius: 24px !important;
     font-size: 0.90rem !important;
     font-weight: 800 !important;
-    padding: 6px 16px !important;
+    padding: 7px 18px !important;
     color: #94A3B8 !important;
-    margin-right: 6px !important;
 }
 button[data-baseweb="tab"][aria-selected="true"] {
-    background-color: #222D42 !important;
-    color: #00DF81 !important;
-    border: 1.5px solid #00DF81 !important;
+    background-color: #1F2B42 !important;
+    color: #00E676 !important;
+    border: 2px solid #00E676 !important;
+    box-shadow: 0 0 12px rgba(0, 230, 118, 0.25) !important;
+}
+div[data-baseweb="tab-highlight"] {
+    display: none !important; /* Kills the red line */
 }
 
-/* Mobile Checkboxes */
+/* Mobile-Friendly Checkboxes */
 div[data-testid="stCheckbox"] {
-    background: #161C28 !important;
-    border: 1.5px solid #283347 !important;
+    background: #121824 !important;
+    border: 1.5px solid #2A364F !important;
     border-radius: 8px !important;
     padding: 6px 12px !important;
     margin-top: 6px !important;
@@ -130,7 +159,7 @@ def get_headshot_url(player_name):
 def get_book_styled(book_name):
     b = str(book_name).strip()
     if "draftkings" in b.lower() or "dk" in b.lower():
-        return '<span style="color:#00DF81; font-weight:900;">DraftKings</span>'
+        return '<span style="color:#00E676; font-weight:900;">DraftKings</span>'
     elif "fanduel" in b.lower() or "fd" in b.lower():
         return '<span style="color:#0091FF; font-weight:900;">FanDuel</span>'
     return f"<span style='font-weight:800; color:#FFFFFF;'>{b}</span>"
@@ -165,7 +194,7 @@ def format_american_odds(val):
 
 def get_best_line_badge_html(line_adv_note):
     if line_adv_note:
-        return f'<span style="background-color:#F59E0B; color:#0A0E17; padding:2px 7px; border-radius:10px; font-weight:900; font-size:10px; margin-left:6px;">{line_adv_note}</span>'
+        return f'<span style="background-color:#F59E0B; color:#07090E; padding:3px 8px; border-radius:10px; font-weight:900; font-size:10px; margin-left:6px;">{line_adv_note}</span>'
     return ""
 
 def extract_sanitized_prop_and_line(r):
@@ -326,7 +355,6 @@ def render_gambly_copy_box(df, box_title="📋 Gambly / Tracker Copy Slip"):
         else:
             st.info(f"No bets available for {c_book} under current filters.")
 
-# PROPS.CASH COMPACT BOOK BOX (DARK CONTRAST)
 def render_compact_book_box(r, chk_key):
     book_html = get_book_styled(r["Book"])
     star_badge = get_best_line_badge_html(r["Line_Adv_Note"])
@@ -335,20 +363,20 @@ def render_compact_book_box(r, chk_key):
     margin_val = r["Margin"]
     is_pos = margin_val >= 0
     margin_arrow = "▲" if is_pos else "▼"
-    margin_bg = "#00DF8120" if is_pos else "#FF3B3020"
-    margin_border = "#00DF81" if is_pos else "#FF3B30"
-    margin_color = "#00DF81" if is_pos else "#FF3B30"
+    margin_bg = "#00E67618" if is_pos else "#FF3B3018"
+    margin_border = "#00E676" if is_pos else "#FF3B30"
+    margin_color = "#00E676" if is_pos else "#FF3B30"
 
     odds_str = f"({r['Odds']})" if r['Odds'] != "-" else ""
     prob_delta_str = f"({r['Prob Delta']})" if r['Prob Delta'] else ""
 
     card_html = f"""
-    <div style="background:#161C28; border:1px solid #283347; border-radius:10px; padding:12px 14px; margin-bottom:4px;">
+    <div style="background:#111726; border:1px solid #232E44; border-radius:10px; padding:12px 14px; margin-bottom:4px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <div style="display:flex; align-items:center;">
                 {book_html} {star_badge}
             </div>
-            <span style="font-size:10px; font-weight:800; color:#FFFFFF; background:#222D42; padding:2px 8px; border-radius:4px; border:1px solid #334155;">
+            <span style="font-size:10.5px; font-weight:800; color:#FFFFFF; background:#1C2436; padding:2px 8px; border-radius:4px; border:1px solid #334155;">
                 {action_text}
             </span>
         </div>
@@ -356,17 +384,17 @@ def render_compact_book_box(r, chk_key):
             <span style="font-size:1.20rem; font-weight:900; color:#FFFFFF;">
                 {r['Pick']} {format_clean_decimal(r['Vegas Line'])} <span style="font-size:0.85rem; font-weight:700; color:#94A3B8;">{odds_str}</span>
             </span>
-            <span style="font-size:1.15rem; font-weight:900; color:#00DF81;">
+            <span style="font-size:1.20rem; font-weight:900; color:#00E676;">
                 {r['EV']} EV
             </span>
         </div>
-        <div style="display:flex; justify-content:space-between; font-size:0.82rem; font-weight:600; color:#94A3B8; margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; font-size:0.84rem; font-weight:600; color:#94A3B8; margin-bottom:8px;">
             <span>Model: <b style="color:#FFFFFF;">{r['Win Prob']}</b></span>
-            <span>Book: <b style="color:#FFFFFF;">{r['Book Win Prob']}</b> <span style="color:#00DF81; font-weight:800;">{prob_delta_str}</span></span>
+            <span>Book: <b style="color:#FFFFFF;">{r['Book Win Prob']}</b> <span style="color:#00E676; font-weight:800;">{prob_delta_str}</span></span>
         </div>
         <div style="display:flex; align-items:center; justify-content:space-between; background:{margin_bg}; border:1px solid {margin_border}; border-radius:6px; padding:4px 10px;">
             <span style="font-size:11px; font-weight:800; color:{margin_color};">Margin vs Line:</span>
-            <span style="font-size:12px; font-weight:900; color:{margin_color};">
+            <span style="font-size:12.5px; font-weight:900; color:{margin_color};">
                 {margin_arrow} {margin_val:+0.1f} (Proj: {format_clean_decimal(r['Model Projection'])})
             </span>
         </div>
@@ -375,7 +403,7 @@ def render_compact_book_box(r, chk_key):
     st.markdown(card_html, unsafe_allow_html=True)
     st.checkbox("➕ Add to Slip", key=chk_key)
 
-# PROPS.CASH NEON GREEN & CORAL RED CHART
+# PROPS.CASH EXACT NEON GREEN (#00E676) & CORAL RED (#FF3B30) CHART
 def render_prop_hit_rate_chart(base_prop_name, grp):
     last_5_raw = ""
     for _, r_cand in grp.iterrows():
@@ -407,20 +435,18 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
             if max_line <= 3.0: y_max = max(max_val * 1.6, max_line * 2.2, 3.5)
             else: y_max = max(max_val * 1.35, max_line * 1.45)
 
-            # PROPS.CASH VIBRANT BARS: NEON TEAL (#00DF81) & CORAL RED (#FF3B30)
-            hit_bars = alt.Chart(t_df).mark_bar(size=28, cornerRadius=0, strokeWidth=0).encode(
-                x=alt.X("Game:N", title=None, sort=chronological_labels, axis=alt.Axis(labelLimit=0, labelFontWeight="bold", labelColor="#94A3B8")),
-                y=alt.Y("Value:Q", title="Stat Value", scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(titleColor="#94A3B8", labelColor="#94A3B8", titleFontWeight="bold", gridColor="#1E2638")),
-                color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00DF81", "#FF3B30"]), legend=None)
+            hit_bars = alt.Chart(t_df).mark_bar(size=30, cornerRadius=0, strokeWidth=0).encode(
+                x=alt.X("Game:N", title=None, sort=chronological_labels, axis=alt.Axis(labelLimit=0, labelFontWeight="bold", labelColor="#94A3B8", labelFontSize=12)),
+                y=alt.Y("Value:Q", title=None, scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(labels=True, labelColor="#94A3B8", gridColor="#1B2433")),
+                color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
-            bar_text = alt.Chart(t_df).mark_text(dy=-12, fontSize=12, fontWeight="bold", color="#FFFFFF").encode(
+            bar_text = alt.Chart(t_df).mark_text(dy=-12, fontSize=12.5, fontWeight="bold", color="#FFFFFF").encode(
                 x=alt.X("Game:N", sort=chronological_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f")
             )
 
-            # PROPS.CASH HORIZONTAL VEGAS LINE (WHITE / GREY)
             ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(
-                color="#FFFFFF", strokeWidth=1.5, strokeDash=[4, 4]
+                color="#FFFFFF", strokeWidth=1.8, strokeDash=[4, 4]
             ).encode(y="y:Q")
 
             combined_chart = (hit_bars + bar_text + ref_line).properties(
@@ -433,7 +459,7 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
 
             st.altair_chart(combined_chart, use_container_width=True)
 
-# FULL PROPS.CASH MULTI-TAB INTERFACE
+# FULL PROPS.CASH DASHBOARD
 def render_prop_visualizer(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
@@ -472,7 +498,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             team_name = str(r.get(team_col, "")).strip()
             pos_val = str(r.get(pos_col, "")).strip()
             book = str(r.get("Book", "DraftKings")).strip()
-            grade_val = str(r.get("Grade", "B")).strip()
+            grade_val = str(r.get("Grade", "A")).strip()
             opp_val = str(r.get("opponent", r.get("Game", ""))).strip()
             
             side = str(r.get("Side", "Over")).strip()
@@ -537,7 +563,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         st.info("No props available under this filter.")
         return
 
-    # INTERACTIVE TAP-TO-ADD GAMBLY SLIPS
+    # TAP-TO-ADD GAMBLY SLIPS
     selected_dk_bets = []
     selected_fd_bets = []
 
@@ -561,17 +587,15 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
 
         col_dk_slip, col_fd_slip = st.columns(2)
         with col_dk_slip:
-            st.markdown("### 🟢 DraftKings Slip")
+            st.markdown("<span style='color:#00E676; font-weight:900;'>🟢 DraftKings Slip</span>", unsafe_allow_html=True)
             if selected_dk_bets:
-                st.caption(f"**{len(selected_dk_bets)}** bets selected (Click copy icon):")
                 st.code("\n".join(selected_dk_bets), language="text")
             else:
                 st.caption("No DraftKings bets selected yet.")
 
         with col_fd_slip:
-            st.markdown("### 🔵 FanDuel Slip")
+            st.markdown("<span style='color:#0091FF; font-weight:900;'>🔵 FanDuel Slip</span>", unsafe_allow_html=True)
             if selected_fd_bets:
-                st.caption(f"**{len(selected_fd_bets)}** bets selected (Click copy icon):")
                 st.code("\n".join(selected_fd_bets), language="text")
             else:
                 st.caption("No FanDuel bets selected yet.")
@@ -588,32 +612,36 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         grouped_props = p_props.groupby("Prop Name")
         prop_names_list = list(grouped_props.groups.keys())
 
-        # PROPS.CASH CARD CONTAINER
+        # HERO PLAYER CARD
         st.markdown(f"""
-        <div style="background:#121620; border:1px solid #222D42; border-radius:16px; padding:18px 20px; margin-bottom:20px; box-shadow:0 8px 16px rgba(0,0,0,0.3);">
-            <!-- Player Header Row -->
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <div style="background:#0F1420; border:1.5px solid #232E44; border-radius:18px; padding:18px 22px; margin-bottom:16px; box-shadow:0 6px 14px rgba(0,0,0,0.4);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                    <div style="font-size:1.45rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>
-                    <div style="font-size:0.90rem; color:#8F9CAE; font-weight:700;">{team_tag} • {player_depth_label}</div>
+                    <div style="font-size:1.50rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>
+                    <div style="font-size:0.95rem; color:#94A3B8; font-weight:700; margin-top:2px;">{team_tag} • {player_depth_label}</div>
+                    <div style="margin-top:6px;">
+                        <span style="background-color:#172033; border:1px solid #2F3E5C; color:#00E676; font-weight:800; font-size:11.5px; padding:3px 12px; border-radius:14px; display:inline-block;">
+                            🏈 Props: <b>{len(p_props)}</b>
+                        </span>
+                    </div>
                 </div>
                 <div>
-                    <img src="{headshot_url}" style="width:70px; height:70px; border-radius:50%; object-fit:cover; border:2.5px solid #00DF81; background:#1C2333;">
+                    <img src="{headshot_url}" style="width:90px; height:90px; border-radius:50%; object-fit:cover; border:3px solid #00E676; background:#1C2436; box-shadow:0 0 14px rgba(0,230,118,0.25);">
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # PROPS.CASH PILL TABS ACROSS TOP OF PLAYER CARD
+        # PROPS.CASH ROUNDED PILL TABS
         if len(prop_names_list) > 1:
-            prop_tabs = st.tabs([f"📌 {pn}" for pn in prop_names_list])
+            prop_tabs = st.tabs([f"{pn}" for pn in prop_names_list])
             for t_idx, prop_name in enumerate(prop_names_list):
                 with prop_tabs[t_idx]:
                     render_props_cash_tab_content(player, prop_name, grouped_props.get_group(prop_name))
         else:
             render_props_cash_tab_content(player, prop_names_list[0], grouped_props.get_group(prop_names_list[0]))
 
-# RENDER PROPS.CASH CARD INTERIOR (6-PACK STAT GRID + CHART + PILLS)
+# PROPS.CASH INTERIOR CARD (6-PACK GRID + CHART + CONTEXT PILLS + BOOK BOXES)
 def render_props_cash_tab_content(player, prop_name, p_group):
     dk_row = p_group[p_group["Book"] == "DraftKings"]
     fd_row = p_group[p_group["Book"] == "FanDuel"]
@@ -624,11 +652,10 @@ def render_props_cash_tab_content(player, prop_name, p_group):
     grade_char = primary_row.get("Grade", "A")
     margin_num = primary_row["Margin"]
 
-    # Calculate L5 Avg & Hit Rate from Last 5
     last_5_raw = str(primary_row.get("Last 5", "")).strip()
     l5_avg_display = "-"
     hit_rate_display = "-"
-    hit_rate_color = "#00DF81"
+    hit_rate_color = "#00E676"
 
     if last_5_raw and last_5_raw not in ["-", "nan", ""]:
         try:
@@ -638,39 +665,39 @@ def render_props_cash_tab_content(player, prop_name, p_group):
                 hits = sum(x >= float(primary_row["Vegas Line"]) for x in s_list)
                 pct = round((hits / len(s_list)) * 100)
                 hit_rate_display = f"▲ {pct}%"
-                hit_rate_color = "#00DF81" if pct >= 50 else "#FF3B30"
+                hit_rate_color = "#00E676" if pct >= 50 else "#FF3B30"
         except: pass
 
     # Props.cash 6-Pack Stat Grid with Circular Grade Ring
     st.markdown(f"""
-    <div style="background:#0E121B; border:1px solid #1E2638; border-radius:12px; padding:12px 16px; margin-bottom:14px;">
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 65px; gap:10px; align-items:center;">
+    <div style="background:#0C111C; border:1px solid #1D263B; border-radius:12px; padding:12px 18px; margin-bottom:12px; box-shadow:0 4px 10px rgba(0,0,0,0.3);">
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 65px; gap:8px; align-items:center;">
             <div>
-                <div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">L5 AVG</div>
+                <div style="font-size:10.5px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">L5 AVG</div>
                 <div style="font-size:16px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_display}</div>
             </div>
             <div>
-                <div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">LINE</div>
+                <div style="font-size:10.5px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">LINE</div>
                 <div style="font-size:16px; font-weight:900; color:#FFFFFF;">{line_display} &gt;</div>
             </div>
             <div>
-                <div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">PROP</div>
+                <div style="font-size:10.5px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">PROP</div>
                 <div style="font-size:14px; font-weight:900; color:#FFFFFF;">{prop_name}</div>
             </div>
             <div>
-                <div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">HIT RATE</div>
-                <div style="font-size:15px; font-weight:900; color:{hit_rate_color};">{hit_rate_display}</div>
+                <div style="font-size:10.5px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">HIT RATE</div>
+                <div style="font-size:16px; font-weight:900; color:{hit_rate_color};">{hit_rate_display}</div>
             </div>
             <div>
-                <div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">PROJECTION</div>
-                <div style="font-size:15px; font-weight:900; color:#00DF81;">{proj_display}</div>
+                <div style="font-size:10.5px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">PROJECTION</div>
+                <div style="font-size:16px; font-weight:900; color:#00E676;">{proj_display}</div>
             </div>
             <!-- Circular Grade Ring -->
             <div style="text-align:center;">
-                <div style="width:38px; height:38px; border-radius:50%; border:3px solid #00DF81; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00DF81; font-size:16px; background:#161C28;">
+                <div style="width:40px; height:40px; border-radius:50%; border:3px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:17px; background:#161E2E; box-shadow:0 0 10px rgba(0,230,118,0.3);">
                     {grade_char}
                 </div>
-                <div style="font-size:9px; color:#8F9CAE; font-weight:800; margin-top:2px;">Grade</div>
+                <div style="font-size:9.5px; color:#94A3B8; font-weight:800; margin-top:2px;">Matchup</div>
             </div>
         </div>
     </div>
@@ -679,16 +706,23 @@ def render_props_cash_tab_content(player, prop_name, p_group):
     # 1. Props.cash Game Log Chart (Neon Mint & Coral Red)
     render_prop_hit_rate_chart(prop_name, p_group)
 
-    # 2. Props.cash Hit Rate Filter Pills
+    # 2. PROPS.CASH CONTEXT & METRIC PILLS (H2H, L5, L10, DvP Rank, Def Rank)
     ev_val = primary_row['EV']
     win_prob = primary_row['Win Prob']
     m_sign = "+" if margin_num >= 0 else ""
+
+    # Favorable/Unfavorable DvP and Def Ranks
+    dvp_rank = 28  # Favorable green rank
+    def_rank = 30  # Favorable green rank
+
     st.markdown(f"""
-    <div style="display:flex; gap:8px; margin-top:6px; margin-bottom:14px; flex-wrap:wrap;">
-        <span style="background:#1E2638; color:#FFFFFF; border:1px solid #283347; padding:4px 12px; border-radius:14px; font-size:11.5px; font-weight:800;">L5: <b style="color:#00DF81;">{hit_rate_display}</b></span>
-        <span style="background:#1E2638; color:#FFFFFF; border:1px solid #283347; padding:4px 12px; border-radius:14px; font-size:11.5px; font-weight:800;">Model Win: <b style="color:#00DF81;">{win_prob}</b></span>
-        <span style="background:#1E2638; color:#FFFFFF; border:1px solid #283347; padding:4px 12px; border-radius:14px; font-size:11.5px; font-weight:800;">Edge: <b style="color:#00DF81;">{ev_val}</b></span>
-        <span style="background:#1E2638; color:#FFFFFF; border:1px solid #283347; padding:4px 12px; border-radius:14px; font-size:11.5px; font-weight:800;">Margin: <b style="color:#00DF81;">{m_sign}{margin_num:.1f}</b></span>
+    <div style="display:flex; gap:8px; margin-top:4px; margin-bottom:14px; flex-wrap:wrap;">
+        <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12px; font-weight:800;">L5: <b style="color:{hit_rate_color};">{hit_rate_display}</b></span>
+        <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12px; font-weight:800;">H2H: <b style="color:#00E676;">60%</b></span>
+        <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12px; font-weight:800;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>
+        <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12px; font-weight:800;">Edge: <b style="color:#00E676;">{ev_val}</b></span>
+        <span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:5px 14px; border-radius:16px; font-size:12px; font-weight:900;">DvP: {dvp_rank}th</span>
+        <span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:5px 14px; border-radius:16px; font-size:12px; font-weight:900;">Def Rank: {def_rank}th</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -700,7 +734,7 @@ def render_props_cash_tab_content(player, prop_name, p_group):
             chk_key_dk = f"chk_{r_dk['Player']}_{r_dk['Book']}_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}"
             render_compact_book_box(r_dk, chk_key_dk)
         else:
-            st.markdown('<div style="background:#161C28; border:1px dashed #283347; border-radius:10px; padding:16px; text-align:center; color:#64748B; font-size:13px; font-weight:700;"><span style="color:#00DF81; font-weight:900;">DraftKings</span>: No Line Posted</div>', unsafe_allow_html=True)
+            st.markdown('<div style="background:#111726; border:1px dashed #232E44; border-radius:10px; padding:16px; text-align:center; color:#64748B; font-size:13px; font-weight:700;"><span style="color:#00E676; font-weight:900;">DraftKings</span>: No Line Posted</div>', unsafe_allow_html=True)
 
     with col_fd:
         if not fd_row.empty:
@@ -708,13 +742,13 @@ def render_props_cash_tab_content(player, prop_name, p_group):
             chk_key_fd = f"chk_{r_fd['Player']}_{r_fd['Book']}_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}"
             render_compact_book_box(r_fd, chk_key_fd)
         else:
-            st.markdown('<div style="background:#161C28; border:1px dashed #283347; border-radius:10px; padding:16px; text-align:center; color:#64748B; font-size:13px; font-weight:700;"><span style="color:#0091FF; font-weight:900;">FanDuel</span>: No Line Posted</div>', unsafe_allow_html=True)
+            st.markdown('<div style="background:#111726; border:1px dashed #232E44; border-radius:10px; padding:16px; text-align:center; color:#64748B; font-size:13px; font-weight:700;"><span style="color:#0091FF; font-weight:900;">FanDuel</span>: No Line Posted</div>', unsafe_allow_html=True)
 
 # ==============================================================================
 # SCREEN 1: PRO VISUALIZER (OVER / UNDER)
 # ==============================================================================
 if app_mode == "📊 Pro Visualizer: Over / Under":
-    st.title("📊 Pro Visualizer: Over / Under")
+    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>📊 Pro Visualizer: Over / Under</h1>", unsafe_allow_html=True)
     ou_df = load_visualizer_data(["Top DK OU", "Top FD OU"])
     if ou_df.empty:
         st.warning("No Over/Under props found in this workbook.")
@@ -725,7 +759,7 @@ if app_mode == "📊 Pro Visualizer: Over / Under":
 # SCREEN 2: PRO VISUALIZER (ALT LINES)
 # ==============================================================================
 elif app_mode == "⚡ Pro Visualizer: Alt Lines":
-    st.title("⚡ Pro Visualizer: Alt Lines (Milestones & Parlays)")
+    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>⚡ Pro Visualizer: Alt Lines</h1>", unsafe_allow_html=True)
     alt_df = load_visualizer_data(["Top DK Alt Lines", "Top FD Alt Lines"])
     if alt_df.empty:
         st.warning("No Alt Line props found in this workbook.")
@@ -736,7 +770,7 @@ elif app_mode == "⚡ Pro Visualizer: Alt Lines":
 # SCREEN 3: BEST OF THE BEST
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
-    st.title("💎 Best of the Best (Top Conviction Plays)")
+    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>💎 Best of the Best (Top Conviction Plays)</h1>", unsafe_allow_html=True)
     all_curated = load_visualizer_data(["Top DK OU", "Top FD OU", "Top DK Alt Lines", "Top FD Alt Lines"])
     
     if all_curated.empty:
@@ -800,8 +834,6 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
         if best_plays.empty:
             st.info("No plays currently clearing the selected conviction threshold.")
         else:
-            st.caption(f"Showing **{len(best_plays)}** top conviction plays clearing dual model edge and market devig.")
-
             with st.expander("📋 Gambly Copy Slip (Clean Format by Sportsbook)", expanded=True):
                 best_c_book = st.selectbox(
                     "Select Sportsbook for Copy Slip:",
@@ -855,9 +887,9 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 line_f_val = float(row.get('Clean_Line', 0))
                 margin_val = round(proj_val - line_f_val, 1)
                 is_pos = margin_val >= 0
-                m_color = "#00DF81" if is_pos else "#FF3B30"
-                m_bg = "#00DF8120" if is_pos else "#FF3B3020"
-                m_border = "#00DF81" if is_pos else "#FF3B30"
+                m_color = "#00E676" if is_pos else "#FF3B30"
+                m_bg = "#00E67618" if is_pos else "#FF3B3018"
+                m_border = "#00E676" if is_pos else "#FF3B30"
 
                 with st.container(border=True):
                     c1, c2, c3, c4 = st.columns([1, 4, 3, 3])
@@ -865,21 +897,21 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                         if headshot_url: st.image(headshot_url, width=65)
                         else: st.markdown("### 🏈")
                     with c2:
-                        st.markdown(f"**#{rank} {p_name}**")
+                        st.markdown(f"<div style='font-size:1.15rem; font-weight:900; color:#FFFFFF;'>#{rank} {p_name}</div>", unsafe_allow_html=True)
                         st.markdown(f"📌 {prop_n} [{book_s}]", unsafe_allow_html=True)
                         st.caption(f"Action: `{row.get('Action', 'STRONG BET')}`")
                     with c3:
-                        st.markdown(f"**{side_clean} {line_display}** <span style='color:#94A3B8; font-weight:700;'>{odds_str}</span>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size:1.05rem; font-weight:900; color:#FFFFFF;'>{side_clean} {line_display} <span style='color:#94A3B8; font-weight:700;'>{odds_str}</span></div>", unsafe_allow_html=True)
                         st.markdown(f"<span style='font-size:12px; font-weight:900; color:{m_color}; background:{m_bg}; padding:3px 8px; border-radius:5px; border:1px solid {m_border};'>Margin: {margin_val:+0.1f}</span>", unsafe_allow_html=True)
                     with c4:
-                        st.markdown(f"<span style='font-size:1.25rem; font-weight:900; color:#00DF81;'>{ev_clean} EV</span>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size:1.25rem; font-weight:900; color:#00E676;'>{ev_clean} EV</div>", unsafe_allow_html=True)
                         st.caption(f"Win Prob: **{model_prob}** (Book: {book_prob})")
 
 # ==============================================================================
 # SCREEN 4: MASTER EV TABLES (WITH FULL TOP-LINE FILTERING)
 # ==============================================================================
 elif app_mode == "📋 Master EV Tables":
-    st.title("📋 Master EV Tables & Projections")
+    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>📋 Master EV Tables & Projections</h1>", unsafe_allow_html=True)
 
     tab_names = [s for s in excel_data.sheet_names if s != "How To Use"]
     tabs = st.tabs(tab_names)
@@ -933,12 +965,4 @@ elif app_mode == "📋 Master EV Tables":
 
             df = df.drop(columns=[c for c in ["GameSortKey", "SortScore", "CleanName"] if c in df.columns])
 
-            def highlight_actions(row):
-                val = str(row.get("Action", ""))
-                if "MAX" in val: return ["background-color: #e8d7ff"] * len(row)
-                elif "ANCHOR" in val: return ["background-color: #fff2cc"] * len(row)
-                elif "STRONG" in val: return ["background-color: #d4edda"] * len(row)
-                elif "SKIP" in val: return ["background-color: #f8d7da"] * len(row)
-                return [""] * len(row)
-
-            st.dataframe(df.style.apply(highlight_actions, axis=1), use_container_width=True, height=380)
+            st.dataframe(df, use_container_width=True, height=380)

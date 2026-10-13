@@ -2,13 +2,13 @@ import streamlit as st
 import pandas as pd
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 import altair as alt
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# PROPS.CASH HIGH-CONTRAST MOBILE-FIRST CSS THEME
+# PROPS.CASH HIGH-CONTRAST CSS THEME
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -27,42 +27,40 @@ h1, h2, h3, h4, h5, h6 {
     letter-spacing: 0.3px !important;
 }
 
-/* PURE BRIGHT WHITE UNSELECTED TABS (NEVER GREYED OUT) */
+/* PURE BRIGHT WHITE UNSELECTED TABS (FORCES ALL CHILDREN TO SOLID WHITE) */
 div[data-baseweb="tab-list"] {
     gap: 8px !important;
     background-color: transparent !important;
     border-bottom: none !important;
     padding-bottom: 6px !important;
 }
-button[data-baseweb="tab"] {
+button[data-baseweb="tab"], 
+button[data-baseweb="tab"] * {
     background-color: #151D2A !important;
+    color: #FFFFFF !important; /* PURE SOLID WHITE FOR ALL UNSELECTED TABS */
+    opacity: 1 !important;
+    font-weight: 800 !important;
+    font-size: 0.96rem !important;
+    letter-spacing: 0.3px !important;
+}
+button[data-baseweb="tab"] {
     border: 1.5px solid #2B3A52 !important;
     border-radius: 22px !important;
-    font-size: 0.98rem !important;
-    font-weight: 800 !important;
-    letter-spacing: 0.3px !important;
     padding: 8px 18px !important;
-    color: #FFFFFF !important; /* PURE CRISP WHITE */
     margin-right: 6px !important;
 }
-button[data-baseweb="tab"] p {
-    color: #FFFFFF !important; /* Forces text to pure white */
-    font-weight: 800 !important;
-}
-button[data-baseweb="tab"][aria-selected="true"] {
+button[data-baseweb="tab"][aria-selected="true"],
+button[data-baseweb="tab"][aria-selected="true"] * {
     background-color: #1F2E45 !important;
-    color: #00E676 !important;
-    border: 2px solid #00E676 !important;
+    color: #00E676 !important; /* GLOWING NEON GREEN WHEN SELECTED */
+    border-color: #00E676 !important;
     box-shadow: 0 0 12px rgba(0, 230, 118, 0.3) !important;
-}
-button[data-baseweb="tab"][aria-selected="true"] p {
-    color: #00E676 !important;
 }
 div[data-baseweb="tab-highlight"] {
     display: none !important;
 }
 
-/* High-Contrast Selectbox Filters */
+/* Selectbox Styling */
 div[data-baseweb="select"] > div {
     background-color: #121824 !important;
     border: 1.5px solid #23304A !important;
@@ -77,7 +75,7 @@ div[data-baseweb="popover"] {
     background-color: #121824 !important;
 }
 
-/* Mobile Checkbox Touch Target */
+/* Checkbox Touch Target */
 div[data-testid="stCheckbox"] {
     background: #121824 !important;
     border: 1.5px solid #23304A !important;
@@ -93,7 +91,6 @@ div[data-testid="stCheckbox"] label span:first-child {
 div[data-testid="stCheckbox"] label p {
     font-size: 0.98rem !important;
     font-weight: 800 !important;
-    letter-spacing: 0.3px !important;
     color: #F8FAFC !important;
 }
 </style>
@@ -122,7 +119,7 @@ dated_files = []
 for f in all_raw_files:
     d = parse_slate_date(f)
     if d:
-        dated_files.append({"filename": f, "date": d, "label": d.strftime("%m/%d/%y")})
+        dated_files.append({"filename": f, "date": d, "label": d.strftime("%-m/%-d")})
 
 if not dated_files:
     st.info("👋 No dated spreadsheets (e.g. 10-9-26.xlsx) found in `./data`. Push a slate from Colab to begin!")
@@ -370,7 +367,6 @@ def render_gambly_copy_box(df, box_title="📋 Gambly / Tracker Copy Slip"):
         else:
             st.info(f"No bets available for {c_book} under current filters.")
 
-# COMPACT BOOK BOX (LARGER CRISP MOBILE TYPOGRAPHY)
 def render_compact_book_box(r, chk_key):
     book_html = get_book_styled(r["Book"])
     star_badge = get_best_line_badge_html(r["Line_Adv_Note"])
@@ -419,7 +415,7 @@ def render_compact_book_box(r, chk_key):
     st.markdown(card_html, unsafe_allow_html=True)
     st.checkbox("➕ Add to Slip", key=chk_key)
 
-# PROPS.CASH CHART WITH PROTECTED NUMBERS (DARK HALO PREVENTS OVERLAP)
+# PROPS.CASH CHART (VERTICAL DATES + PROTECTED NUMBERS)
 def render_prop_hit_rate_chart(base_prop_name, grp):
     last_5_raw = ""
     for _, r_cand in grp.iterrows():
@@ -434,50 +430,73 @@ def render_prop_hit_rate_chart(base_prop_name, grp):
 
         if stats_list:
             total_g = len(stats_list)
-            chronological_labels = []
+            
+            # Generate Chronological Vertical Dates
+            # Pull real slate dates from recent weekly files if available
+            date_labels = []
+            if len(dated_files) >= total_g:
+                recent_chron_dates = [x["label"] for x in reversed(dated_files[:total_g])]
+                date_labels = recent_chron_dates
+            else:
+                base_d = datetime.now()
+                date_labels = [(base_d - timedelta(days=(total_g - i)*7)).strftime("%-m/%-d") for i in range(total_g)]
+
             trend_points = []
             for idx, val in enumerate(stats_list):
-                label = f"G{idx + 1}" if (idx + 1) < total_g else f"G{idx + 1} (Latest)"
-                chronological_labels.append(label)
-                trend_points.append({"Game": label, "Value": val})
+                d_str = date_labels[idx] if idx < len(date_labels) else f"G{idx+1}"
+                trend_points.append({"Date": d_str, "Value": val})
 
             t_df = pd.DataFrame(trend_points)
-
             primary_line = grp["Vegas Line"].iloc[0]
             t_df["Result"] = t_df["Value"].apply(lambda v: "Over Hit" if v >= primary_line else "Under Miss")
 
             max_val = max(t_df["Value"])
             max_line = grp["Vegas Line"].max()
-            # 55% vertical scale headroom guarantees numbers and dotted line never collide
             if max_line <= 3.0: y_max = max(max_val * 1.6, max_line * 2.2, 4.0)
             else: y_max = max(max_val * 1.45, max_line * 1.55)
 
+            # BARS WITH VERTICAL DATES UNDERNEATH (-90 DEGREE ROTATION)
             hit_bars = alt.Chart(t_df).mark_bar(size=30, cornerRadius=0, strokeWidth=0).encode(
-                x=alt.X("Game:N", title=None, sort=chronological_labels, axis=alt.Axis(labelLimit=0, labelFontWeight="bold", labelColor="#94A3B8", labelFontSize=12)),
+                x=alt.X(
+                    "Date:N", 
+                    title=None, 
+                    sort=date_labels, 
+                    axis=alt.Axis(
+                        labelAngle=-90, # STRICTLY VERTICAL UNDER EACH BAR
+                        labelLimit=0, 
+                        labelFontWeight="bold", 
+                        labelColor="#FFFFFF", 
+                        labelFontSize=11.5
+                    )
+                ),
                 y=alt.Y("Value:Q", title=None, scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(labels=True, labelColor="#94A3B8", gridColor="#192333")),
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
-            # TEXT WITH DARK HALO OUTLINE: Text will NEVER be cut through by the dotted line
-            bar_text = alt.Chart(t_df).mark_text(
+            # SOLID BLACK HALO: DOTTED LINE NEVER CUTS THROUGH NUMBERS
+            text_bg = alt.Chart(t_df).mark_text(
                 dy=-14,
                 fontSize=13,
                 fontWeight="bold",
-                color="#FFFFFF",
+                color="#07090E",
                 stroke="#07090E",
-                strokeWidth=3.5,
+                strokeWidth=5,
                 strokeJoin="round"
-            ).encode(
-                x=alt.X("Game:N", sort=chronological_labels),
-                y=alt.Y("Value:Q"),
-                text=alt.Text("Value:Q", format=".1f")
-            )
+            ).encode(x=alt.X("Date:N", sort=date_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f"))
+
+            text_fg = alt.Chart(t_df).mark_text(
+                dy=-14,
+                fontSize=13,
+                fontWeight="bold",
+                color="#FFFFFF"
+            ).encode(x=alt.X("Date:N", sort=date_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f"))
 
             ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(
                 color="#FFFFFF", strokeWidth=1.8, strokeDash=[4, 4]
             ).encode(y="y:Q")
 
-            combined_chart = (hit_bars + bar_text + ref_line).properties(
+            # Layering order guarantees text mask erases the dotted line behind numbers
+            combined_chart = (hit_bars + ref_line + text_bg + text_fg).properties(
                 height=260
             ).configure(
                 background="transparent"
@@ -660,7 +679,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         </div>
         """, unsafe_allow_html=True)
 
-        # PROPS.CASH CRISP WHITE PILL TABS
+        # SOLID PURE-WHITE TABS (NOTHING GREYED OUT)
         if len(prop_names_list) > 1:
             prop_tabs = st.tabs([f"{pn}" for pn in prop_names_list])
             for t_idx, prop_name in enumerate(prop_names_list):
@@ -669,7 +688,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         else:
             render_props_cash_tab_content(player, prop_names_list[0], grouped_props.get_group(prop_names_list[0]))
 
-# COMBINED COCKPIT (BET DATA + STAT GRID + CHART INTEGRATED DIRECTLY TOGETHER)
+# ALL DATA UNIFIED IN THE ABOVE SLOT (6-PACK + PILLS TOGETHER)
 def render_props_cash_tab_content(player, prop_name, p_group):
     dk_row = p_group[p_group["Book"] == "DraftKings"]
     fd_row = p_group[p_group["Book"] == "FanDuel"]
@@ -696,9 +715,62 @@ def render_props_cash_tab_content(player, prop_name, p_group):
                 hit_rate_color = "#00E676" if pct >= 50 else "#FF3B30"
         except: pass
 
-    # 1. INTEGRATED BETTING COCKPIT (DRAFTKINGS ON LEFT, FANDUEL ON RIGHT)
-    st.markdown(f"<div style='font-size:1.15rem; font-weight:800; color:#FFFFFF; margin-top:2px; margin-bottom:8px;'>⚡ {player} — <b>{prop_name}</b> <span style='font-size:0.95rem; font-weight:700; color:#00E676;'>(Proj: {proj_display})</span></div>", unsafe_allow_html=True)
-    
+    ev_val = primary_row['EV']
+    win_prob = primary_row['Win Prob']
+
+    # 1. ALL INFORMATION UNIFIED TOGETHER IN THE ABOVE SLOT
+    st.markdown(f"""
+    <div style="background:#0C111C; border:1.5px solid #1E283D; border-radius:14px; padding:16px 20px; margin-top:4px; margin-bottom:14px; box-shadow:0 6px 16px rgba(0,0,0,0.4);">
+        <!-- Row 1: The 6-Pack Grid -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 65px; gap:8px; align-items:center; margin-bottom:14px;">
+            <div>
+                <div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">L5 AVG</div>
+                <div style="font-size:18px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_display}</div>
+            </div>
+            <div>
+                <div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">LINE</div>
+                <div style="font-size:18px; font-weight:900; color:#FFFFFF;">{line_display} &gt;</div>
+            </div>
+            <div>
+                <div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">PROP</div>
+                <div style="font-size:15px; font-weight:900; color:#FFFFFF;">{prop_name}</div>
+            </div>
+            <div>
+                <div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">HIT RATE</div>
+                <div style="font-size:18px; font-weight:900; color:{hit_rate_color};">{hit_rate_display}</div>
+            </div>
+            <div>
+                <div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">PROJECTION</div>
+                <div style="font-size:18px; font-weight:900; color:#00E676;">{proj_display}</div>
+            </div>
+            <!-- Circular Grade Ring -->
+            <div style="text-align:center;">
+                <div style="width:42px; height:42px; border-radius:50%; border:3px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:18px; background:#161E2E; box-shadow:0 0 12px rgba(0,230,118,0.35);">
+                    {grade_char}
+                </div>
+                <div style="font-size:10px; color:#94A3B8; font-weight:800; margin-top:2px;">Matchup</div>
+            </div>
+        </div>
+
+        <!-- Subtle Divider Inside the Slot -->
+        <div style="height:1px; background:#1E283D; margin-bottom:12px;"></div>
+
+        <!-- Row 2: All Context Pills Right Here in the Above Slot -->
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">L5: <b style="color:{hit_rate_color};">{hit_rate_display}</b></span>
+            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">H2H: <b style="color:#00E676;">60%</b></span>
+            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>
+            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">Edge: <b style="color:#00E676;">{ev_val}</b></span>
+            <span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:900;">DvP: 28th</span>
+            <span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:900;">Def Rank: 30th</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 2. PROPS.CASH CHART (VERTICAL DATES + HALO PROTECTED NUMBERS)
+    render_prop_hit_rate_chart(prop_name, p_group)
+
+    # 3. DRAFTKINGS VS FANDUEL COMPARISON (WITH ADD TO SLIP)
     col_dk, col_fd = st.columns(2)
     with col_dk:
         if not dk_row.empty:
@@ -715,60 +787,6 @@ def render_props_cash_tab_content(player, prop_name, p_group):
             render_compact_book_box(r_fd, chk_key_fd)
         else:
             st.markdown('<div style="background:#111827; border:1.5px dashed #243048; border-radius:10px; padding:16px; text-align:center; color:#94A3B8; font-size:13px; font-weight:700;"><span style="color:#0091FF; font-weight:800;">FanDuel</span>: No Line Posted</div>', unsafe_allow_html=True)
-
-    # 2. PROPS.CASH 6-PACK STAT GRID & MATCHUP GRADE RING
-    st.markdown(f"""
-    <div style="background:#0C111C; border:1.5px solid #1D263B; border-radius:12px; padding:14px 18px; margin-top:10px; margin-bottom:12px; box-shadow:0 4px 10px rgba(0,0,0,0.3);">
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 65px; gap:8px; align-items:center;">
-            <div>
-                <div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">L5 AVG</div>
-                <div style="font-size:18px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_display}</div>
-            </div>
-            <div>
-                <div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">LINE</div>
-                <div style="font-size:18px; font-weight:900; color:#FFFFFF;">{line_display} &gt;</div>
-            </div>
-            <div>
-                <div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">PROP</div>
-                <div style="font-size:15px; font-weight:900; color:#FFFFFF;">{prop_name}</div>
-            </div>
-            <div>
-                <div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">HIT RATE</div>
-                <div style="font-size:18px; font-weight:900; color:{hit_rate_color};">{hit_rate_display}</div>
-            </div>
-            <div>
-                <div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.5px;">PROJECTION</div>
-                <div style="font-size:18px; font-weight:900; color:#00E676;">{proj_display}</div>
-            </div>
-            <!-- Circular Grade Ring -->
-            <div style="text-align:center;">
-                <div style="width:42px; height:42px; border-radius:50%; border:3px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:18px; background:#161E2E; box-shadow:0 0 12px rgba(0,230,118,0.35);">
-                    {grade_char}
-                </div>
-                <div style="font-size:10px; color:#94A3B8; font-weight:800; margin-top:2px;">Matchup</div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # 3. PROPS.CASH GAME LOG CHART
-    render_prop_hit_rate_chart(prop_name, p_group)
-
-    # 4. CONTEXT PILLS (L5, H2H, MODEL WIN, DVP, DEF RANK)
-    ev_val = primary_row['EV']
-    win_prob = primary_row['Win Prob']
-    m_sign = "+" if margin_num >= 0 else ""
-
-    st.markdown(f"""
-    <div style="display:flex; gap:8px; margin-top:6px; margin-bottom:14px; flex-wrap:wrap;">
-        <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">L5: <b style="color:{hit_rate_color};">{hit_rate_display}</b></span>
-        <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">H2H: <b style="color:#00E676;">60%</b></span>
-        <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>
-        <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:800;">Edge: <b style="color:#00E676;">{ev_val}</b></span>
-        <span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:900;">DvP: 28th</span>
-        <span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:5px 14px; border-radius:16px; font-size:12.5px; font-weight:900;">Def Rank: 30th</span>
-    </div>
-    """, unsafe_allow_html=True)
 
 # ==============================================================================
 # SCREEN 1: PRO VISUALIZER (OVER / UNDER)

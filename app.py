@@ -537,7 +537,7 @@ def render_props_cash_tab_content(player, prop_name, p_group):
     <div style="background:#0C111C; border:1.5px solid #1D263B; border-radius:12px; padding:12px 16px; margin-bottom:10px;">
         <div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 55px; gap:6px; align-items:center; margin-bottom:10px;">
             <div><div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">L5 AVG</div><div style="font-size:15px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_disp}</div></div>
-            <div><div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">LINE</div><div style="font-size:15px; font-weight:900; color:#FFFFFF;">{line_disp} &gt;</div></div>
+            <div><div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">LINE</div><div style="font-size:15px; font-weight:900; color:#FFFFFF;">{line_display} &gt;</div></div>
             <div><div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">PROP</div><div style="font-size:13px; font-weight:900; color:#FFFFFF;">{prop_name}</div></div>
             <div><div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">HIT RATE</div><div style="font-size:15px; font-weight:900; color:{hit_color};">{hit_rate_disp}</div></div>
             <div><div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">PROJECTION</div><div style="font-size:15px; font-weight:900; color:#00E676;">{proj_display}</div></div>

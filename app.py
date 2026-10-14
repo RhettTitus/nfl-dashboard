@@ -18,43 +18,12 @@ html, body, [class*="css"], .stApp {
     color: #F8FAFC !important;
 }
 
-/* FOLDER TABS STYLING (CRISP WHITE / NEON GREEN ACTIVE FOLDER) */
-[data-testid="stTabs"] {
-    background-color: transparent !important;
-}
-[data-testid="stTabs"] div[data-baseweb="tab-list"] {
-    gap: 6px !important;
-    border-bottom: 2px solid #1E283D !important;
-    background-color: transparent !important;
-    padding-bottom: 2px !important;
-    margin-bottom: 8px !important;
-}
-[data-testid="stTabs"] div[data-baseweb="tab-highlight"],
-[data-testid="stTabs"] div[data-baseweb="tab-border"] {
+/* KILLS ANY RESIDUAL TABS OR EXPANDER DOM ARTIFACTS */
+div[data-testid="stExpander"],
+details[data-testid="stExpander"],
+div[data-baseweb="tab-list"],
+div[data-testid="stTabs"] {
     display: none !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"] {
-    background-color: #121824 !important;
-    border: 1.5px solid #23304A !important;
-    border-bottom: none !important;
-    border-top-left-radius: 10px !important;
-    border-top-right-radius: 10px !important;
-    padding: 6px 16px !important;
-    margin-right: 4px !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"] * {
-    color: #94A3B8 !important;
-    font-size: 0.85rem !important;
-    font-weight: 800 !important;
-    opacity: 1 !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
-    background-color: #1E293B !important;
-    border: 1.5px solid #00E676 !important;
-    border-bottom: none !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
-    color: #00E676 !important;
 }
 
 /* Crisp Headings */
@@ -88,7 +57,7 @@ div[data-testid="stCheckbox"] {
     border-bottom-right-radius: 14px !important;
     padding: 8px 16px !important;
     margin-top: -6px !important;
-    margin-bottom: 12px !important;
+    margin-bottom: 16px !important;
 }
 div[data-testid="stCheckbox"] label span:first-child {
     width: 18px !important;
@@ -357,7 +326,7 @@ def tag_best_line_advantages(df):
 
     return df
 
-# PROPS.CASH ADAPTIVE CHART (TUNED TO THE SPECIFIC BOOK'S LINE)
+# PROPS.CASH ADAPTIVE CHART
 def render_props_cash_chart(row, last_5_raw):
     primary_line = float(row["Vegas Line"])
     stats_list = []
@@ -412,14 +381,13 @@ def render_props_cash_chart(row, last_5_raw):
         height=140, width=320
     ).configure(background="transparent").configure_view(strokeWidth=0)
 
-# SINGLE PROPS.CASH BOOK COCKPIT (DRAFTKINGS OR FANDUEL)
+# SINGLE PROPS.CASH BOOK CARD
 def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk_key):
     book_html = get_book_styled(r["Book"])
     star_badge = get_best_line_badge_html(r.get("Line_Adv_Note", ""))
     grade_char = r.get("Grade", "A")
     grade_color = "#00E676" if grade_char in ['A', 'B'] else ("#F59E0B" if grade_char == 'C' else "#FF3B30")
 
-    # Short Game Time & Matchup Format: Sun 10-13 @ 8:15PM BUF @ LA
     game_str = r.get("Game", "")
     short_time = format_short_gametime(r.get("Game Time", ""))
     time_and_matchup = f"{short_time} • {game_str}" if short_time else game_str
@@ -442,17 +410,14 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
                 hit_rate_color = "#00E676" if pct >= 50 else "#FF3B30"
         except: pass
 
-    # Margin vs Line
     margin_val = r["Margin"]
     is_pos = margin_val >= 0
     margin_arrow = "▲" if is_pos else "▼"
     margin_color = "#00E676" if is_pos else "#FF3B30"
 
-    # Color code book probability accurately: <= 52.4% Green (fair/plus money), > 52.4% Red (heavy juice)
     b_prob_raw = r.get("_raw_book_prob", 0.5)
     b_prob_color = "#00E676" if b_prob_raw <= 0.524 else "#FF3B30"
 
-    # Badges
     hist_sig = str(r.get("History Signal", "-")).strip()
     hist_badge = ""
     if "IMPROVED" in hist_sig:
@@ -519,24 +484,38 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     st.markdown(card_bot_html, unsafe_allow_html=True)
     st.checkbox(f"➕ Add to {r['Book']} Slip", key=chk_key)
 
-# MASTER VISUALIZER WITH RESTORED COPY BOX & FOLDER TABS
+# MASTER VISUALIZER WITH DEDICATED GAME/MATCHUP & PROP CATEGORY FILTERS
 def render_prop_visualizer(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
+    game_col = next((c for c in ["Game", "game"] if c in combined_df.columns), None)
 
-    f_col1, f_col2, f_col3, f_col4 = st.columns([1, 1, 1, 1])
+    f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns([1.2, 1, 1, 1, 1.2])
     with f_col1:
+        matchup_list = ["All Matchups"] + sorted(combined_df[game_col].dropna().astype(str).unique().tolist()) if game_col else ["All Matchups"]
+        selected_matchup = st.selectbox("⚔️ Matchup:", matchup_list)
+    with f_col2:
         team_list = ["All Teams"] + sorted(combined_df[team_col].dropna().astype(str).unique().tolist()) if team_col else ["All Teams"]
         selected_team = st.selectbox("🏈 Team:", team_list)
-    with f_col2:
-        selected_pos = st.selectbox("🎯 Position:", ["All Positions", "QB", "RB", "WR", "TE"])
     with f_col3:
-        selected_book = st.selectbox("🎰 Sportsbook:", ["All Sportsbooks", "DraftKings", "FanDuel"])
+        selected_pos = st.selectbox("🎯 Position:", ["All Positions", "QB", "RB", "WR", "TE"])
     with f_col4:
-        prop_choices = ["All Props", "Yards Only", "Counts/Volume Only"]
-        selected_prop_filter = st.selectbox("📊 Prop Filter:", prop_choices)
+        selected_book = st.selectbox("🎰 Sportsbook:", ["All Sportsbooks", "DraftKings", "FanDuel"])
+    with f_col5:
+        prop_categories = [
+            "All Props",
+            "Passing Yards",
+            "Pass Attempts",
+            "Rushing Yards",
+            "Rush Attempts",
+            "Receiving Yards",
+            "Receptions"
+        ]
+        selected_prop_filter = st.selectbox("📊 Prop Category:", prop_categories)
 
     filtered_df = combined_df.copy()
+    if game_col and selected_matchup != "All Matchups":
+        filtered_df = filtered_df[filtered_df[game_col].astype(str) == selected_matchup]
     if team_col and selected_team != "All Teams":
         filtered_df = filtered_df[filtered_df[team_col].astype(str) == selected_team]
     if pos_col and selected_pos != "All Positions":
@@ -631,16 +610,25 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
     raw_props_df = pd.DataFrame(prop_rows).drop_duplicates(subset=["Player", "Prop Label", "Vegas Line"])
     props_df = tag_best_line_advantages(raw_props_df)
 
-    if selected_prop_filter == "Yards Only":
-        props_df = props_df[props_df["Prop Name"].str.contains("Yds|Yards", case=False, na=False)]
-    elif selected_prop_filter == "Counts/Volume Only":
-        props_df = props_df[~props_df["Prop Name"].str.contains("Yds|Yards", case=False, na=False)]
+    # Detailed Prop Category Filtering
+    if selected_prop_filter == "Passing Yards":
+        props_df = props_df[props_df["Prop Name"].str.contains("Pass Yds|Passing Yards", case=False, na=False)]
+    elif selected_prop_filter == "Pass Attempts":
+        props_df = props_df[props_df["Prop Name"].str.contains("Pass Att|Passing Attempts", case=False, na=False)]
+    elif selected_prop_filter == "Rushing Yards":
+        props_df = props_df[props_df["Prop Name"].str.contains("Rush Yds|Rushing Yards", case=False, na=False) & ~props_df["Prop Name"].str.contains("Rush\+Rec", case=False, na=False)]
+    elif selected_prop_filter == "Rush Attempts":
+        props_df = props_df[props_df["Prop Name"].str.contains("Rush Att|Carries|Rushing Attempts", case=False, na=False)]
+    elif selected_prop_filter == "Receiving Yards":
+        props_df = props_df[props_df["Prop Name"].str.contains("Rec Yds|Receiving Yards", case=False, na=False) & ~props_df["Prop Name"].str.contains("Rush\+Rec", case=False, na=False)]
+    elif selected_prop_filter == "Receptions":
+        props_df = props_df[props_df["Prop Name"].str.contains("Recs|Receptions", case=False, na=False)]
 
     if props_df.empty:
         st.info("No props available under this filter.")
         return
 
-    # RESTORED GAMBLY SLIP CONTAINER
+    # GAMBLY COPY BOX
     selected_dk_bets = []
     selected_fd_bets = []
 
@@ -679,6 +667,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
 
     unique_players = sorted(props_df["Player"].unique())
 
+    # PROPS STACKED VERTICALLY ONE UNDER THE OTHER FOR EACH PLAYER
     for player in unique_players:
         p_props = props_df[props_df["Player"] == player]
         team_tag = p_props["Team"].iloc[0] if not p_props.empty else ""
@@ -689,32 +678,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         grouped_props = p_props.groupby("Prop Name")
         prop_names_list = list(grouped_props.groups.keys())
 
-        # FOLDER TABS DIRECTLY ON TOP
-        if len(prop_names_list) > 1:
-            prop_tabs = st.tabs([f"📁 {pn}" for pn in prop_names_list])
-            for t_idx, prop_name in enumerate(prop_names_list):
-                with prop_tabs[t_idx]:
-                    p_group = grouped_props.get_group(prop_name)
-                    dk_row = p_group[p_group["Book"] == "DraftKings"]
-                    fd_row = p_group[p_group["Book"] == "FanDuel"]
-
-                    col_dk, col_fd = st.columns(2)
-                    with col_dk:
-                        if not dk_row.empty:
-                            r_dk = dk_row.iloc[0]
-                            chk_key_dk = f"chk_{r_dk['Player']}_{r_dk['Book']}_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}"
-                            render_props_cash_book_card(r_dk, player, player_depth_label, headshot_url, chk_key_dk)
-                        else:
-                            st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:12px;"><span style="color:#00E676; font-weight:800;">🟢 DraftKings</span>: No line posted for {prop_name}</div>', unsafe_allow_html=True)
-                    with col_fd:
-                        if not fd_row.empty:
-                            r_fd = fd_row.iloc[0]
-                            chk_key_fd = f"chk_{r_fd['Player']}_{r_fd['Book']}_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}"
-                            render_props_cash_book_card(r_fd, player, player_depth_label, headshot_url, chk_key_fd)
-                        else:
-                            st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:12px;"><span style="color:#0091FF; font-weight:800;">🔵 FanDuel</span>: No line posted for {prop_name}</div>', unsafe_allow_html=True)
-        else:
-            prop_name = prop_names_list[0]
+        for prop_name in prop_names_list:
             p_group = grouped_props.get_group(prop_name)
             dk_row = p_group[p_group["Book"] == "DraftKings"]
             fd_row = p_group[p_group["Book"] == "FanDuel"]
@@ -726,14 +690,14 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                     chk_key_dk = f"chk_{r_dk['Player']}_{r_dk['Book']}_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}"
                     render_props_cash_book_card(r_dk, player, player_depth_label, headshot_url, chk_key_dk)
                 else:
-                    st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:12px;"><span style="color:#00E676; font-weight:800;">🟢 DraftKings</span>: No line posted for {prop_name}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#00E676; font-weight:800;">🟢 DraftKings</span>: No line posted for {prop_name} ({player})</div>', unsafe_allow_html=True)
             with col_fd:
                 if not fd_row.empty:
                     r_fd = fd_row.iloc[0]
                     chk_key_fd = f"chk_{r_fd['Player']}_{r_fd['Book']}_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}"
                     render_props_cash_book_card(r_fd, player, player_depth_label, headshot_url, chk_key_fd)
                 else:
-                    st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:12px;"><span style="color:#0091FF; font-weight:800;">🔵 FanDuel</span>: No line posted for {prop_name}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#0091FF; font-weight:800;">🔵 FanDuel</span>: No line posted for {prop_name} ({player})</div>', unsafe_allow_html=True)
 
     # BACK TO TOP BUTTON
     st.markdown("""

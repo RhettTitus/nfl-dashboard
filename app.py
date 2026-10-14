@@ -299,8 +299,75 @@ def load_visualizer_data(target_sheets):
     if not all_rows: return pd.DataFrame()
     return pd.concat(all_rows, ignore_index=True)
 
+def tag_best_line_advantages(df):
+    if df.empty: return df
+    df["Is_Best_Line"] = False
+    df["Line_Adv_Note"] = ""
+
+    def parse_ev_float(v):
+        try: return float(str(v).replace("%", "").strip())
+        except: return -1.0
+    
+    df["_ev_num"] = df["EV"].apply(parse_ev_float)
+
+    for (p_name, prop_n), grp in df.groupby(["Player", "Prop Name"]):
+        if len(grp) > 1:
+            side = grp["Pick"].iloc[0]
+            if side == "Over":
+                min_line = grp["Vegas Line"].min()
+                candidates = grp[grp["Vegas Line"] == min_line]
+                best_idx = candidates["_ev_num"].idxmax()
+                diff = grp["Vegas Line"].max() - min_line
+                df.loc[best_idx, "Is_Best_Line"] = True
+                df.loc[best_idx, "Line_Adv_Note"] = f"⭐ BEST LINE (+{diff:.1f} adv)" if diff > 0 else "⭐ BEST ODDS"
+            else:
+                max_line = grp["Vegas Line"].max()
+                candidates = grp[grp["Vegas Line"] == max_line]
+                best_idx = candidates["_ev_num"].idxmax()
+                diff = max_line - grp["Vegas Line"].min()
+                df.loc[best_idx, "Is_Best_Line"] = True
+                df.loc[best_idx, "Line_Adv_Note"] = f"⭐ BEST LINE (+{diff:.1f} adv)" if diff > 0 else "⭐ BEST ODDS"
+        elif len(grp) == 1:
+            idx = grp.index[0]
+            if grp.loc[idx, "_ev_num"] >= 0.05:
+                df.loc[idx, "Is_Best_Line"] = True
+                df.loc[idx, "Line_Adv_Note"] = "⭐ TOP VALUE"
+
+    return df
+
+def render_gambly_copy_box(df, box_title="📋 Gambly / Tracker Copy Slip"):
+    with st.expander(box_title, expanded=False):
+        c_book = st.selectbox(
+            "Select Sportsbook for Copy Slip:",
+            ["DraftKings", "FanDuel", "All Books (Combined)"],
+            key=f"cb_{box_title}"
+        )
+        
+        slip_df = df.copy()
+        if c_book != "All Books (Combined)":
+            slip_df = slip_df[slip_df["Book"] == c_book]
+            
+        slip_lines = []
+        for _, r in slip_df.iterrows():
+            p = str(r["Player"]).strip()
+            side = str(r["Pick"]).strip()
+            line = format_clean_decimal(r["Vegas Line"])
+            prop = str(r["Prop Name"]).strip()
+            
+            bet_str = format_gambly_bet_string(p, side, line, prop)
+            if bet_str and "nan" not in bet_str.lower():
+                slip_lines.append(bet_str)
+                
+        slip_lines = list(dict.fromkeys(slip_lines))
+        
+        if slip_lines:
+            st.caption(f"Showing **{len(slip_lines)}** {c_book} bets (Click icon in top-right to copy):")
+            st.code("\n".join(slip_lines), language="text")
+        else:
+            st.info(f"No bets available for {c_book} under current filters.")
+
 # --------------------------------------------------------------------------
-# BULLETPROOF ALTAIR CHART RENDERER (NO SCHEMA ERRORS EVER)
+# SCHEMA-COMPLIANT ALTAIR CHART
 # --------------------------------------------------------------------------
 def render_exact_props_cash_chart(base_prop_name, grp):
     last_5_raw = ""
@@ -333,7 +400,6 @@ def render_exact_props_cash_chart(base_prop_name, grp):
                     "Date": d_str, 
                     "Value": val, 
                     "Result": "Over Hit" if val >= primary_line else "Under Miss",
-                    "Baseline": 0.0,
                     "VegasLine": primary_line
                 })
 
@@ -343,41 +409,17 @@ def render_exact_props_cash_chart(base_prop_name, grp):
             if primary_line <= 3.0: y_max = max(max_val * 1.5, primary_line * 2.0, 3.5)
             else: y_max = max(max_val * 1.35, primary_line * 1.45)
 
-            # ALL LAYERS SHARE ONE EXACT DATAFRAME `t_df`
-            base = alt.Chart(t_df)
-
-            hit_bars = base.mark_bar(size=28, cornerRadius=0, strokeWidth=0).encode(
+            hit_bars = alt.Chart(t_df).mark_bar(size=28, cornerRadius=0, strokeWidth=0).encode(
                 x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=-90, labelColor="#94A3B8", labelFontSize=10)),
                 y=alt.Y("Value:Q", title=None, scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(labels=True, labelColor="#94A3B8", gridColor="#192333")),
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
-            # Anchored exactly at `Baseline=0` so it complies with VegaLite v6
-            text_bg = base.mark_text(
-                dy=-12, baseline="bottom", fontSize=11.5, fontWeight="900", color="#07090E", stroke="#07090E", strokeWidth=5
-            ).encode(
-                x=alt.X("Date:N", sort=date_labels),
-                y=alt.Y("Baseline:Q"),
-                text=alt.Text("Value:Q", format=".1f")
-            )
-
-            text_fg = base.mark_text(
-                dy=-12, baseline="bottom", fontSize=11.5, fontWeight="900", color="#FFFFFF"
-            ).encode(
-                x=alt.X("Date:N", sort=date_labels),
-                y=alt.Y("Baseline:Q"),
-                text=alt.Text("Value:Q", format=".1f")
-            )
-
-            # Mapped cleanly to the `VegasLine` column
-            ref_line = base.mark_rule(
+            ref_line = alt.Chart(t_df).mark_rule(
                 color="#FFFFFF", strokeWidth=1.5, strokeDash=[4, 4]
-            ).encode(
-                y=alt.Y("VegasLine:Q")
-            )
+            ).encode(y=alt.Y("VegasLine:Q"))
 
-            # Build layer safely without passing external parameters
-            final_chart = alt.layer(hit_bars, ref_line, text_bg, text_fg).properties(
+            final_chart = alt.layer(hit_bars, ref_line).properties(
                 height=190
             ).configure(
                 background="transparent"
@@ -546,7 +588,7 @@ def render_props_cash_tab_content(player, prop_name, p_group):
         </div>
         """, unsafe_allow_html=True)
 
-        # EXACT CHART WITH BLACK DOTTED LINE AND PROTECTED NUMBERS
+        # EXACT CHART WITH BLACK DOTTED LINE
         render_exact_props_cash_chart(prop_name, p_group)
 
         # DRAFTKINGS & FANDUEL ODDS ROW WITH ADD TO SLIP
@@ -706,13 +748,11 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
 
                 side_raw = str(row.get("Side", "")).strip()
                 side_clean = "Over" if not side_raw or side_raw.lower() in ["nan", "none"] else side_raw
-
                 odds_clean = format_american_odds(row.get("Odds", "-"))
                 odds_str = f" ({odds_clean})" if odds_clean != "-" else ""
 
                 calc_bp_best = get_or_calculate_book_prob(row.get("Book Win Prob"), row.get("Odds"))
                 book_prob = format_percentage(calc_bp_best) if calc_bp_best is not None else "-"
-                
                 model_prob = format_percentage(row.get("_model_prob"))
                 ev_clean = format_percentage(row.get("EV"), is_ev=True)
 
@@ -787,12 +827,4 @@ elif app_mode == "📋 Master EV Tables":
 
             df = df.drop(columns=[c for c in ["GameSortKey", "SortScore", "CleanName"] if c in df.columns])
 
-            def highlight_actions(row):
-                val = str(row.get("Action", ""))
-                if "MAX" in val: return ["background-color: #e8d7ff"] * len(row)
-                elif "ANCHOR" in val: return ["background-color: #fff2cc"] * len(row)
-                elif "STRONG" in val: return ["background-color: #d4edda"] * len(row)
-                elif "SKIP" in val: return ["background-color: #f8d7da"] * len(row)
-                return [""] * len(row)
-
-            st.dataframe(df.style.apply(highlight_actions, axis=1), use_container_width=True, height=380)
+            st.dataframe(df, use_container_width=True, height=380)

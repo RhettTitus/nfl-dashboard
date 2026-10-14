@@ -78,18 +78,12 @@ div[data-baseweb="popover"] {
     background-color: #121824 !important;
 }
 
-/* Checkbox Styling for Inside Book Cards */
+/* Checkbox Restyling to tuck inside the book box */
 div[data-testid="stCheckbox"] {
-    background: #162032 !important;
-    border: 1px solid #2C3E5B !important;
-    border-radius: 6px !important;
-    padding: 2px 8px !important;
-    margin-top: 8px !important;
-}
-div[data-testid="stCheckbox"] label span:first-child {
-    width: 16px !important;
-    height: 16px !important;
-    margin-right: 6px !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0px !important;
+    margin-top: 4px !important;
 }
 div[data-testid="stCheckbox"] label p {
     font-size: 0.82rem !important;
@@ -354,27 +348,29 @@ def render_compact_book_box(r, chk_key):
     odds_str = f"({r['Odds']})" if r['Odds'] != "-" else ""
     prob_delta_str = f"({r['Prob Delta']})" if r['Prob Delta'] else ""
 
-    card_html = (
-        f'<div style="background:#111827; border:1.5px solid #243048; border-radius:12px; padding:12px 14px; margin-bottom:4px;">'
-        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">'
+    # Open single cohesive sportsbook card including the checkbox neatly tucked at the bottom center
+    st.markdown(
+        f'<div style="background:#111827; border:1.5px solid #243048; border-radius:12px; padding:14px 16px; margin-bottom:6px;">'
+        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">'
         f'<div style="display:flex; align-items:center;">{book_html} {star_badge}</div>'
         f'<span style="font-size:11px; font-weight:700; color:#FFFFFF; background:#1E293B; padding:3px 9px; border-radius:4px; letter-spacing:0.3px;">{action_text}</span>'
         f'</div>'
-        f'<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">'
+        f'<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">'
         f'<span style="font-size:1.20rem; font-weight:800; color:#FFFFFF; letter-spacing:0.4px;">{r["Pick"]} {format_clean_decimal(r["Vegas Line"])} <span style="font-size:0.9rem; font-weight:600; color:#94A3B8;">{odds_str}</span></span>'
         f'<span style="font-size:1.20rem; font-weight:800; color:#00E676; letter-spacing:0.3px;">{r["EV"]} EV</span>'
         f'</div>'
-        f'<div style="display:flex; justify-content:space-between; font-size:0.85rem; font-weight:600; color:#94A3B8; letter-spacing:0.2px; margin-bottom:8px;">'
+        f'<div style="display:flex; justify-content:space-between; font-size:0.85rem; font-weight:600; color:#94A3B8; letter-spacing:0.2px; margin-bottom:10px;">'
         f'<span>Model: <b style="color:#FFFFFF; font-weight:700;">{r["Win Prob"]}</b></span>'
         f'<span>Book: <b style="color:#FFFFFF; font-weight:700;">{r["Book Win Prob"]}</b> <span style="color:#00E676; font-weight:800;">{prob_delta_str}</span></span>'
         f'</div>'
-        f'<div style="display:flex; align-items:center; justify-content:space-between; background:{margin_bg}; border:1.5px solid {margin_border}; border-radius:6px; padding:4px 8px;">'
+        f'<div style="display:flex; align-items:center; justify-content:space-between; background:{margin_bg}; border:1.5px solid {margin_border}; border-radius:6px; padding:5px 10px; margin-bottom:8px;">'
         f'<span style="font-size:11.5px; font-weight:700; color:{margin_color}; letter-spacing:0.3px;">Margin vs Line:</span>'
         f'<span style="font-size:12px; font-weight:800; color:{margin_color}; letter-spacing:0.4px;">{margin_arrow} {margin_val:+0.1f} (Proj: {format_clean_decimal(r["Model Projection"])})</span>'
         f'</div>'
-        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True
     )
-    st.markdown(card_html, unsafe_allow_html=True)
+    # Checkbox placed right inside the bottom of the card frame
     st.checkbox("➕ Add to Slip", key=chk_key)
 
 def render_prop_hit_rate_chart_compact(base_prop_name, grp):
@@ -424,7 +420,6 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
 
             ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(color="#FFFFFF", strokeWidth=1.2, strokeDash=[3, 3]).encode(y="y:Q")
 
-            # Taller and wider chart sitting securely in the middle
             compact_chart = (hit_bars + ref_line + text_fg).properties(
                 height=130, width=310
             ).configure(background="transparent").configure_view(strokeWidth=0)
@@ -623,7 +618,7 @@ def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot
     ev_val = primary_row['EV']
     win_prob = primary_row['Win Prob']
 
-    # 1. OPEN CONDENSED MASTER CONTAINER
+    # 1. OPEN CONDENSED MASTER CONTAINER (Clean, no empty top bars)
     st.markdown(
         f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-radius:16px; padding:18px 22px; margin-top:8px; margin-bottom:16px; box-shadow:0 6px 16px rgba(0,0,0,0.4);">',
         unsafe_allow_html=True

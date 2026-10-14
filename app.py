@@ -8,7 +8,7 @@ import altair as alt
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# HIGH-CONTRAST CSS THEME
+# HIGH-CONTRAST CSS THEME (KILLS TAB BARS COMPLETELY)
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -16,6 +16,17 @@ html, body, [class*="css"], .stApp {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     background-color: #07090E !important;
     color: #F8FAFC !important;
+}
+
+/* KILLS THE EMPTY TOP BUBBLE / TAB BAR COMPLETELY */
+div[data-baseweb="tab-list"],
+div[data-testid="stTabs"] > div:first-child,
+div[data-testid="stTabs"] {
+    display: none !important;
+    height: 0px !important;
+    padding: 0px !important;
+    margin: 0px !important;
+    border: none !important;
 }
 
 /* Crisp Headings */
@@ -375,7 +386,6 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
 
             max_val = max(t_df["Value"]) if not t_df.empty else 5.0
             max_line = grp["Vegas Line"].max()
-            # Scaling ensures the numbers on top are comfortably above the white dotted line
             y_max = max(max_val * 1.45, max_line * 1.55, 3.5)
 
             hit_bars = alt.Chart(t_df).mark_bar(size=18, cornerRadius=3, strokeWidth=0).encode(
@@ -384,17 +394,14 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
-            # dy=-10 forces numbers well above the bars and baseline
             text_fg = alt.Chart(t_df).mark_text(dy=-10, fontSize=10.5, fontWeight="bold", color="#FFFFFF").encode(
                 x=alt.X("Date:N", sort=date_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f")
             )
 
-            # DOTTED LINE KEPT PURE WHITE (#FFFFFF)
             ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(
                 color="#FFFFFF", strokeWidth=1.8, strokeDash=[4, 4]
             ).encode(y="y:Q")
 
-            # CRISP SOLID BASELINE AT THE VERY BOTTOM OF THE CHART
             base_axis = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color="#FFFFFF", strokeWidth=2.5).encode(y="y:Q")
 
             compact_chart = (base_axis + hit_bars + ref_line + text_fg).properties(
@@ -557,13 +564,13 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         grouped_props = p_props.groupby("Prop Name")
         prop_names_list = list(grouped_props.groups.keys())
 
-        # Track active prop selection for this player
-        state_key = f"active_prop_{player}"
+        # Selectbox or default to the first prop without creating empty tablist bars
+        state_key = f"prop_sel_{player}"
         if state_key not in st.session_state or st.session_state[state_key] not in prop_names_list:
             st.session_state[state_key] = prop_names_list[0]
 
-        active_prop = st.session_state[state_key]
-        render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list, active_prop, grouped_props.get_group(active_prop))
+        chosen_prop = st.session_state[state_key]
+        render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list, chosen_prop, grouped_props.get_group(chosen_prop))
 
 # FULLY UNIFIED & CONDENSED MASTER BLOCK WITH PROPS FULLY EMBEDDED INSIDE THE BOX
 def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list, active_prop, p_group):
@@ -604,15 +611,9 @@ def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop
     col_prop, col_chart, col_player = st.columns([1.1, 2.0, 1.1])
     
     with col_prop:
-        # PROPS ARE COMPLETELY INSIDE THE BUBBLE VIA INTERNAL BUTTON PILLS
         for pn in prop_names_list:
-            is_active = (pn == active_prop)
-            btn_border = "2px solid #00E676" if is_active else "1.5px solid #2B3A52"
-            btn_color = "#00E676" if is_active else "#FFFFFF"
-            btn_bg = "#1F2E45" if is_active else "#151D2A"
-            
             if st.button(pn, key=f"btn_{player}_{pn}"):
-                st.session_state[f"active_prop_{player}"] = pn
+                st.session_state[f"prop_sel_{player}"] = pn
                 st.rerun()
 
     with col_chart:
@@ -621,7 +622,6 @@ def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop
             st.altair_chart(chart_obj, use_container_width=True)
 
     with col_player:
-        # RIGHT SIDE: POSITION ON TOP, PLAYER NAME BELOW, HEADSHOT ON THE FAR RIGHT
         st.markdown(
             f'<div style="display:flex; align-items:center; justify-content:flex-end; gap:12px; margin-top:4px;">'
             f'<div style="text-align:right;">'

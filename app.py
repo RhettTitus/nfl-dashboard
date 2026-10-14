@@ -78,7 +78,7 @@ div[data-baseweb="popover"] {
     background-color: #121824 !important;
 }
 
-/* FLUSH CHECKBOX STYLING TO INTEGRATE DIRECTLY INTO THE BOOK BOX */
+/* Checkbox Styling for Inside Book Cards */
 div[data-testid="stCheckbox"] {
     background: #111827 !important;
     border: 1.5px solid #243048 !important;
@@ -413,7 +413,7 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
 
             max_val = max(t_df["Value"]) if not t_df.empty else 5.0
             max_line = grp["Vegas Line"].max()
-            y_max = max(max_val * 1.25, max_line * 1.35, 3.0)
+            y_max = max(max_val * 1.3, max_line * 1.4, 3.0)
 
             hit_bars = alt.Chart(t_df).mark_bar(size=18, cornerRadius=3, strokeWidth=0).encode(
                 x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=0, labelFontWeight="bold", labelColor="#94A3B8", labelFontSize=9.5)),
@@ -421,14 +421,17 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
-            text_fg = alt.Chart(t_df).mark_text(dy=-8, fontSize=10, fontWeight="bold", color="#FFFFFF").encode(
+            # dy=-12 ensures numbers sit comfortably above the dashed baseline without touching
+            text_fg = alt.Chart(t_df).mark_text(dy=-12, fontSize=10.5, fontWeight="bold", color="#FFFFFF").encode(
                 x=alt.X("Date:N", sort=date_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f")
             )
 
-            ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(color="#FFFFFF", strokeWidth=1.2, strokeDash=[3, 3]).encode(y="y:Q")
+            # Prominent baseline rule representing the Vegas line
+            ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(color="#00E676", strokeWidth=2.0, strokeDash=[4, 4]).encode(y="y:Q")
 
+            # Chart shifted fully left & made taller and wider to fill the middle space securely
             compact_chart = (hit_bars + ref_line + text_fg).properties(
-                height=130, width=310
+                height=130, width=340
             ).configure(background="transparent").configure_view(strokeWidth=0)
 
             return compact_chart
@@ -592,12 +595,12 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             prop_tabs = st.tabs([f"{pn}" for pn in prop_names_list])
             for t_idx, prop_name in enumerate(prop_names_list):
                 with prop_tabs[t_idx]:
-                    render_props_cash_tab_content(player, team_tag, player_depth_label, headshot_url, len(p_props), prop_name, grouped_props.get_group(prop_name))
+                    render_props_cash_tab_content(player, team_tag, player_depth_label, headshot_url, prop_name, grouped_props.get_group(prop_name))
         else:
-            render_props_cash_tab_content(player, team_tag, player_depth_label, headshot_url, len(p_props), prop_names_list[0], grouped_props.get_group(prop_names_list[0]))
+            render_props_cash_tab_content(player, team_tag, player_depth_label, headshot_url, prop_names_list[0], grouped_props.get_group(prop_names_list[0]))
 
-# FULLY UNIFIED & CONDENSED MASTER BLOCK (NO EMPTY TOP ARTIFACTS)
-def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot_url, total_props_count, prop_name, p_group):
+# FULLY UNIFIED & CONDENSED MASTER BLOCK (NO EMPTY TOP BUBBLES)
+def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot_url, prop_name, p_group):
     dk_row = p_group[p_group["Book"] == "DraftKings"]
     fd_row = p_group[p_group["Book"] == "FanDuel"]
 
@@ -625,19 +628,18 @@ def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot
     ev_val = primary_row['EV']
     win_prob = primary_row['Win Prob']
 
-    # 1. OPEN CONDENSED MASTER CONTAINER
+    # 1. OPEN CONDENSED MASTER CONTAINER (Strictly starts with player name)
     st.markdown(
         f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-radius:16px; padding:18px 22px; margin-top:8px; margin-bottom:16px; box-shadow:0 6px 16px rgba(0,0,0,0.4);">',
         unsafe_allow_html=True
     )
 
-    # 2. TOP HEADER ROW (PLAYER INFO | WIDER/TALLER CHART | HEADSHOT)
-    col_info, col_chart, col_headshot = st.columns([1.1, 2.0, 0.6])
+    # 2. TOP HEADER ROW (PLAYER NAME & POSITION ON LEFT, SHIFTED CHART IN MIDDLE, HEADSHOT ON RIGHT)
+    col_info, col_chart, col_headshot = st.columns([1.1, 2.1, 0.5])
     
     with col_info:
-        st.markdown(f'<div style="font-size:1.45rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div style="font-size:0.95rem; color:#94A3B8; font-weight:700; margin-top:1px;">{team_tag} • {player_depth_label}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div style="margin-top:6px;"><span style="background-color:#172033; border:1px solid #2F3E5C; color:#00E676; font-weight:800; font-size:11.5px; padding:3px 12px; border-radius:12px; display:inline-block;">🏈 Props: <b>{total_props_count}</b></span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:1.45rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px; margin-top:12px;">{player}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:0.95rem; color:#94A3B8; font-weight:700; margin-top:2px;">{team_tag} • {player_depth_label}</div>', unsafe_allow_html=True)
 
     with col_chart:
         chart_obj = render_prop_hit_rate_chart_compact(prop_name, p_group)

@@ -8,7 +8,7 @@ import altair as alt
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# PROPS.CASH HIGH-CONTRAST CSS THEME (KILLS RED LINE & ENFORCES PURE WHITE TABS)
+# PROPS.CASH HIGH-CONTRAST CSS THEME
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -39,7 +39,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 [data-testid="stTabs"] div[data-baseweb="tab-highlight"],
 [data-testid="stTabs"] div[data-baseweb="tab-border"] {
-    display: none !important; /* PERMANENTLY REMOVES RED UNDERLINE */
+    display: none !important;
 }
 [data-testid="stTabs"] button[data-baseweb="tab"] {
     background-color: #151D2A !important;
@@ -49,7 +49,7 @@ h1, h2, h3, h4, h5, h6 {
     margin-right: 6px !important;
 }
 [data-testid="stTabs"] button[data-baseweb="tab"] * {
-    color: #FFFFFF !important; /* PURE CRISP WHITE FOR ALL INACTIVE TABS */
+    color: #FFFFFF !important;
     font-size: 0.95rem !important;
     font-weight: 800 !important;
     opacity: 1 !important;
@@ -60,7 +60,7 @@ h1, h2, h3, h4, h5, h6 {
     box-shadow: 0 0 12px rgba(0, 230, 118, 0.3) !important;
 }
 [data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
-    color: #00E676 !important; /* NEON GREEN WHEN SELECTED */
+    color: #00E676 !important;
 }
 
 /* Selectbox Styling */
@@ -78,24 +78,22 @@ div[data-baseweb="popover"] {
     background-color: #121824 !important;
 }
 
-/* Checkbox Touch Target inside Book Box */
+/* Checkbox Styling for Inside Book Cards */
 div[data-testid="stCheckbox"] {
-    background: #151D2A !important;
-    border: 1.5px solid #2B3A52 !important;
-    border-radius: 8px !important;
-    padding: 4px 10px !important;
-    margin-top: 6px !important;
-    margin-bottom: 2px !important;
+    background: #162032 !important;
+    border: 1px solid #2C3E5B !important;
+    border-radius: 6px !important;
+    padding: 2px 8px !important;
+    margin-top: 8px !important;
 }
 div[data-testid="stCheckbox"] label span:first-child {
-    width: 18px !important;
-    height: 18px !important;
-    margin-right: 8px !important;
+    width: 16px !important;
+    height: 16px !important;
+    margin-right: 6px !important;
 }
 div[data-testid="stCheckbox"] label p {
-    font-size: 0.88rem !important;
+    font-size: 0.82rem !important;
     font-weight: 800 !important;
-    letter-spacing: 0.3px !important;
     color: #00E676 !important;
 }
 </style>
@@ -426,9 +424,9 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
 
             ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(color="#FFFFFF", strokeWidth=1.2, strokeDash=[3, 3]).encode(y="y:Q")
 
-            # Taller (125px) and wider (325px) to fill the middle box cleanly without overlapping
+            # Taller and wider chart sitting securely in the middle
             compact_chart = (hit_bars + ref_line + text_fg).properties(
-                height=125, width=325
+                height=130, width=310
             ).configure(background="transparent").configure_view(strokeWidth=0)
 
             return compact_chart
@@ -596,7 +594,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         else:
             render_props_cash_tab_content(player, team_tag, player_depth_label, headshot_url, len(p_props), prop_names_list[0], grouped_props.get_group(prop_names_list[0]))
 
-# FULLY UNIFIED & CONDENSED MASTER BLOCK WITH SPACED SCREEN-WIDTH METRICS
+# FULLY UNIFIED & CONDENSED MASTER BLOCK (NO EMPTY TOP ARTIFACTS)
 def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot_url, total_props_count, prop_name, p_group):
     dk_row = p_group[p_group["Book"] == "DraftKings"]
     fd_row = p_group[p_group["Book"] == "FanDuel"]
@@ -631,7 +629,7 @@ def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot
         unsafe_allow_html=True
     )
 
-    # 2. TOP HEADER ROW (PLAYER INFO | SIDE-BY-SIDE WIDER/TALLER CHART | HEADSHOT)
+    # 2. TOP HEADER ROW (PLAYER INFO | WIDER/TALLER CHART | HEADSHOT)
     col_info, col_chart, col_headshot = st.columns([1.1, 2.0, 0.6])
     
     with col_info:
@@ -663,7 +661,7 @@ def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot
     )
     st.markdown(metrics_html, unsafe_allow_html=True)
 
-    # 4. BOTTOM METRICS PILLS (SPACED EQUALLY ACROSS THE ENTIRE SCREEN WIDTH)
+    # 4. BOTTOM METRICS PILLS (STRETCHED EVENLY ACROSS THE SCREEN WIDTH)
     pills_html = (
         f'<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; margin-bottom:6px; gap:8px;">'
         f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 14px; border-radius:16px; font-size:13px; font-weight:800; flex:1; text-align:center;">L5: <b style="color:{hit_rate_color};">{hit_rate_display}</b></span>'
@@ -677,7 +675,7 @@ def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot
     )
     st.markdown(pills_html, unsafe_allow_html=True)
 
-    # 5. DRAFTKINGS VS FANDUEL COMPARISON CARDS BELOW
+    # 5. DRAFTKINGS VS FANDUEL COMPARISON CARDS BELOW (WITH CHECKBOX EMBEDDED INSIDE)
     col_dk, col_fd = st.columns(2)
     with col_dk:
         if not dk_row.empty:

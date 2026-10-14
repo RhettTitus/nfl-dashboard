@@ -71,8 +71,8 @@ button[data-baseweb="tab"] {
 button[data-baseweb="tab"][aria-selected="true"],
 button[data-baseweb="tab"][aria-selected="true"] * {
     background-color: #1F2B42 !important;
-    color: #00E676 !important;
-    border-color: #00E676 !important;
+    color: #00DF81 !important;
+    border-color: #00DF81 !important;
 }
 div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {
     display: none !important;
@@ -170,9 +170,9 @@ def get_headshot_url(player_name):
 def get_book_styled(book_name):
     b = str(book_name).strip()
     if "draftkings" in b.lower() or "dk" in b.lower():
-        return '<span style="color:#00E676; font-weight:900;">DraftKings</span>'
+        return '<span style="color:#00E676; font-weight:900;">DK</span>'
     elif "fanduel" in b.lower() or "fd" in b.lower():
-        return '<span style="color:#0091FF; font-weight:900;">FanDuel</span>'
+        return '<span style="color:#0091FF; font-weight:900;">FD</span>'
     return f"<span>{b}</span>"
 
 def format_percentage(val, is_ev=False):
@@ -293,7 +293,7 @@ def load_visualizer_data(target_sheets):
     return pd.concat(all_rows, ignore_index=True)
 
 # --------------------------------------------------------------------------
-# SAFE SCHEMA-COMPLIANT ALTAIR CHART
+# SAFE SCHEMA-COMPLIANT ALTAIR CHART (FIXES SCHEMA VALIDATION ERROR)
 # --------------------------------------------------------------------------
 def render_exact_props_cash_chart(base_prop_name, grp):
     last_5_raw = ""
@@ -317,52 +317,66 @@ def render_exact_props_cash_chart(base_prop_name, grp):
                 base_d = datetime.now()
                 date_labels = [(base_d - timedelta(days=(total_g - i)*7)).strftime("%-m/%-d") for i in range(total_g)]
 
+            primary_line = grp["Vegas Line"].iloc[0]
+            
             trend_points = []
             for idx, val in enumerate(stats_list):
                 d_str = date_labels[idx] if idx < len(date_labels) else f"G{idx+1}"
-                trend_points.append({"Date": d_str, "Value": val})
+                trend_points.append({
+                    "Date": d_str, 
+                    "Value": val, 
+                    "Result": "Over Hit" if val >= primary_line else "Under Miss",
+                    "Baseline": 0.0
+                })
 
             t_df = pd.DataFrame(trend_points)
-            primary_line = grp["Vegas Line"].iloc[0]
-            
-            t_df["Result"] = t_df["Value"].apply(lambda v: "Over Hit" if v >= primary_line else "Under Miss")
 
             max_val = max(t_df["Value"])
             max_line = grp["Vegas Line"].max()
             if max_line <= 3.0: y_max = max(max_val * 1.5, max_line * 2.0, 3.5)
             else: y_max = max(max_val * 1.35, max_line * 1.45)
 
-            # LAYER 1: Hit Rate Bars
+            # LAYER 1: Bars
             hit_bars = alt.Chart(t_df).mark_bar(size=28, cornerRadius=0, strokeWidth=0).encode(
-                x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=-90, labelColor="#94A3B8", labelFontSize=11)),
+                x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=-90, labelColor="#94A3B8", labelFontSize=10)),
                 y=alt.Y("Value:Q", title=None, scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(labels=True, labelColor="#94A3B8", gridColor="#192333")),
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
-            # LAYER 2: Text Background (Dark Halo)
+            # LAYER 2: Text Background (Dark Halo for visibility over line)
             text_bg = alt.Chart(t_df).mark_text(
-                dy=-6, baseline="bottom", fontSize=11.5, fontWeight="900", color="#07090E", stroke="#07090E", strokeWidth=5
+                dy=-8, baseline="bottom", fontSize=11.5, fontWeight="900", color="#0A0E17", stroke="#0A0E17", strokeWidth=5
             ).encode(
                 x=alt.X("Date:N", sort=date_labels),
-                y=alt.value(165), # Anchored safely at bottom
+                y=alt.Y("Baseline:Q"),
                 text=alt.Text("Value:Q", format=".1f")
             )
 
-            # LAYER 3: Text Foreground (White)
+            # LAYER 3: Text Foreground
             text_fg = alt.Chart(t_df).mark_text(
-                dy=-6, baseline="bottom", fontSize=11.5, fontWeight="900", color="#FFFFFF"
+                dy=-8, baseline="bottom", fontSize=11.5, fontWeight="900", color="#FFFFFF"
             ).encode(
                 x=alt.X("Date:N", sort=date_labels),
-                y=alt.value(165),
+                y=alt.Y("Baseline:Q"),
                 text=alt.Text("Value:Q", format=".1f")
             )
 
-            # LAYER 4: Black Dotted Vegas Line
-            ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(
-                color="#000000", strokeWidth=2.5, strokeDash=[2, 3]
-            ).encode(y="y:Q")
+            # LAYER 4 & 5: Dotted Reference Line + Label
+            rule_df = pd.DataFrame({"VegasLine": [primary_line], "Label": [f"{primary_line:.1f}"]})
+            
+            ref_line = alt.Chart(rule_df).mark_rule(
+                color="#FFFFFF", strokeWidth=1.5, strokeDash=[4, 4]
+            ).encode(y=alt.Y("VegasLine:Q"))
 
-            final_chart = alt.layer(hit_bars, ref_line, text_bg, text_fg).properties(
+            line_label = alt.Chart(rule_df).mark_text(
+                align="left", dx=2, dy=-8, fontSize=10, fontWeight="bold", color="#FFFFFF"
+            ).encode(
+                x=alt.value(0),
+                y=alt.Y("VegasLine:Q"),
+                text=alt.Text("Label:N")
+            )
+
+            final_chart = alt.layer(hit_bars, ref_line, line_label, text_bg, text_fg).properties(
                 height=190
             ).configure(
                 background="transparent"
@@ -504,33 +518,75 @@ def render_props_cash_tab_content(player, prop_name, p_group):
     ev_val = primary_row['EV']
     win_prob = primary_row['Win Prob']
 
-    # UNIFIED COCKPIT CARD (WITH ALL INFO CONSOLIDATED)
+    # UNIFIED COCKPIT CARD
     st.markdown(f"""
-    <div style="background:#0C111C; border:1.5px solid #1D263B; border-radius:12px; padding:16px 20px; margin-bottom:10px;">
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 55px; gap:6px; align-items:center; margin-bottom:14px;">
-            <div><div style="font-size:10px; color:#8F9CAE; font-weight:800;">L5 AVG</div><div style="font-size:16px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_disp}</div></div>
-            <div><div style="font-size:10px; color:#8F9CAE; font-weight:800;">LINE</div><div style="font-size:16px; font-weight:900; color:#FFFFFF;">{line_display} &gt;</div></div>
-            <div><div style="font-size:10px; color:#8F9CAE; font-weight:800;">PROP</div><div style="font-size:14px; font-weight:900; color:#FFFFFF;">{prop_name}</div></div>
-            <div><div style="font-size:10px; color:#8F9CAE; font-weight:800;">HIT RATE</div><div style="font-size:16px; font-weight:900; color:{hit_color};">{hit_rate_disp}</div></div>
-            <div><div style="font-size:10px; color:#8F9CAE; font-weight:800;">PROJECTION</div><div style="font-size:16px; font-weight:900; color:#00E676;">{proj_display}</div></div>
+    <div style="background:#0C111C; border:1.5px solid #1D263B; border-radius:12px; padding:12px 16px; margin-bottom:10px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 55px; gap:6px; align-items:center; margin-bottom:10px;">
+            <div><div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">L5 AVG</div><div style="font-size:15px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_disp}</div></div>
+            <div><div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">LINE</div><div style="font-size:15px; font-weight:900; color:#FFFFFF;">{line_display} &gt;</div></div>
+            <div><div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">PROP</div><div style="font-size:13px; font-weight:900; color:#FFFFFF;">{prop_name}</div></div>
+            <div><div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">HIT RATE</div><div style="font-size:15px; font-weight:900; color:{hit_color};">{hit_rate_disp}</div></div>
+            <div><div style="font-size:9.5px; color:#8F9CAE; font-weight:800;">PROJECTION</div><div style="font-size:15px; font-weight:900; color:#00E676;">{proj_display}</div></div>
             <div style="text-align:center;">
-                <div style="width:38px; height:38px; border-radius:50%; border:2.5px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:16px; background:#161E2E;">{grade_char}</div>
+                <div style="width:36px; height:36px; border-radius:50%; border:2.5px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:15px; background:#161E2E;">{grade_char}</div>
                 <div style="font-size:8px; color:#8F9CAE; font-weight:800; margin-top:2px;">Matchup</div>
             </div>
         </div>
-        <div style="height:1px; background:#1D263B; margin-bottom:12px;"></div>
+        <div style="height:1px; background:#1D263B; margin-bottom:8px;"></div>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:4px 12px; border-radius:14px; font-size:11px; font-weight:800;">L5: <b style="color:{hit_color};">{hit_rate_disp}</b></span>
-            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:4px 12px; border-radius:14px; font-size:11px; font-weight:800;">H2H: <b style="color:#00E676;">60%</b></span>
-            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:4px 12px; border-radius:14px; font-size:11px; font-weight:800;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>
-            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:4px 12px; border-radius:14px; font-size:11px; font-weight:800;">Edge: <b style="color:#00E676;">{ev_val}</b></span>
-            <span style="background:#131B2B; color:#00E676; border:1px solid #00E67680; padding:4px 12px; border-radius:14px; font-size:11px; font-weight:900;">DvP: 28th</span>
-            <span style="background:#131B2B; color:#00E676; border:1px solid #00E67680; padding:4px 12px; border-radius:14px; font-size:11px; font-weight:900;">Def Rank: 30th</span>
+            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:800;">L5: <b style="color:{hit_color};">{hit_rate_disp}</b></span>
+            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:800;">H2H: <b style="color:#00E676;">60%</b></span>
+            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:800;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>
+            <span style="background:#131B2B; color:#FFFFFF; border:1px solid #23304A; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:800;">Edge: <b style="color:#00E676;">{ev_val}</b></span>
+            <span style="background:#131B2B; color:#00E676; border:1px solid #00E67680; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:900;">DvP: 28th</span>
+            <span style="background:#131B2B; color:#00E676; border:1px solid #00E67680; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:900;">Def Rank: 30th</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     render_exact_props_cash_chart(prop_name, p_group)
+
+    # ------------------------------------------------------------------
+    # DRAFTKINGS & FANDUEL SIDE-BY-SIDE ODDS COMPARISON
+    # ------------------------------------------------------------------
+    col_dk, col_fd = st.columns(2)
+    with col_dk:
+        if not dk_row.empty:
+            r_dk = dk_row.iloc[0]
+            chk_k = f"m_chk_{r_dk['Player']}_DK_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}"
+            st.markdown(f"""
+            <div style="background:#101624; border:1px solid #243048; border-radius:8px; padding:7px 10px;">
+                <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:800;">
+                    <span style="color:#00E676;">DraftKings</span>
+                    <span style="color:#00E676;">{r_dk['EV']} EV</span>
+                </div>
+                <div style="font-size:14px; font-weight:900; color:#FFFFFF; margin-top:2px;">
+                    {r_dk['Pick']} {format_clean_decimal(r_dk['Vegas Line'])} <span style="font-size:11px; color:#94A3B8;">({r_dk['Odds']})</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.checkbox("➕ Slip", key=chk_k)
+        else:
+            st.markdown('<div style="background:#101624; border:1px dashed #243048; border-radius:8px; padding:12px; text-align:center; color:#64748B; font-size:11px; font-weight:700;"><span style="color:#00E676;">DK</span>: Unposted</div>', unsafe_allow_html=True)
+
+    with col_fd:
+        if not fd_row.empty:
+            r_fd = fd_row.iloc[0]
+            chk_k = f"m_chk_{r_fd['Player']}_FD_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}"
+            st.markdown(f"""
+            <div style="background:#101624; border:1px solid #243048; border-radius:8px; padding:7px 10px;">
+                <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:800;">
+                    <span style="color:#0091FF;">FanDuel</span>
+                    <span style="color:#00E676;">{r_fd['EV']} EV</span>
+                </div>
+                <div style="font-size:14px; font-weight:900; color:#FFFFFF; margin-top:2px;">
+                    {r_fd['Pick']} {format_clean_decimal(r_fd['Vegas Line'])} <span style="font-size:11px; color:#94A3B8;">({r_fd['Odds']})</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.checkbox("➕ Slip", key=chk_k)
+        else:
+            st.markdown('<div style="background:#101624; border:1px dashed #243048; border-radius:8px; padding:12px; text-align:center; color:#64748B; font-size:11px; font-weight:700;"><span style="color:#0091FF;">FD</span>: Unposted</div>', unsafe_allow_html=True)
 
 # ==============================================================================
 # SCREENS
@@ -645,11 +701,13 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
 
                 side_raw = str(row.get("Side", "")).strip()
                 side_clean = "Over" if not side_raw or side_raw.lower() in ["nan", "none"] else side_raw
+
                 odds_clean = format_american_odds(row.get("Odds", "-"))
                 odds_str = f" ({odds_clean})" if odds_clean != "-" else ""
 
                 calc_bp_best = get_or_calculate_book_prob(row.get("Book Win Prob"), row.get("Odds"))
                 book_prob = format_percentage(calc_bp_best) if calc_bp_best is not None else "-"
+                
                 model_prob = format_percentage(row.get("_model_prob"))
                 ev_clean = format_percentage(row.get("EV"), is_ev=True)
 

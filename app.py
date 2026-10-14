@@ -27,15 +27,15 @@ h1, h2, h3, h4, h5, h6 {
     letter-spacing: 0.3px !important;
 }
 
-/* TARGET SPECIFIC STREAMLIT TABS (KILLS RED LINE, FORCES BRIGHT WHITE TABS) */
+/* PURE WHITE / NEON GREEN TABS FOR INSIDE THE CARD */
 [data-testid="stTabs"] {
     background-color: transparent !important;
 }
 [data-testid="stTabs"] div[data-baseweb="tab-list"] {
-    gap: 8px !important;
+    gap: 6px !important;
     border-bottom: none !important;
     background-color: transparent !important;
-    padding-bottom: 6px !important;
+    padding-bottom: 2px !important;
 }
 [data-testid="stTabs"] div[data-baseweb="tab-highlight"],
 [data-testid="stTabs"] div[data-baseweb="tab-border"] {
@@ -44,20 +44,20 @@ h1, h2, h3, h4, h5, h6 {
 [data-testid="stTabs"] button[data-baseweb="tab"] {
     background-color: #151D2A !important;
     border: 1.5px solid #2B3A52 !important;
-    border-radius: 22px !important;
-    padding: 8px 18px !important;
-    margin-right: 6px !important;
+    border-radius: 16px !important;
+    padding: 4px 12px !important;
+    margin-right: 4px !important;
 }
 [data-testid="stTabs"] button[data-baseweb="tab"] * {
     color: #FFFFFF !important;
-    font-size: 0.95rem !important;
+    font-size: 0.82rem !important;
     font-weight: 800 !important;
     opacity: 1 !important;
 }
 [data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
     background-color: #1F2E45 !important;
     border: 2px solid #00E676 !important;
-    box-shadow: 0 0 12px rgba(0, 230, 118, 0.3) !important;
+    box-shadow: 0 0 8px rgba(0, 230, 118, 0.3) !important;
 }
 [data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
     color: #00E676 !important;
@@ -421,13 +421,18 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
+            # Numbers safely above baseline
             text_fg = alt.Chart(t_df).mark_text(dy=-12, fontSize=10.5, fontWeight="bold", color="#FFFFFF").encode(
                 x=alt.X("Date:N", sort=date_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f")
             )
 
+            # Prominent baseline rule representing the Vegas line
             ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(color="#00E676", strokeWidth=2.0, strokeDash=[4, 4]).encode(y="y:Q")
 
-            compact_chart = (hit_bars + ref_line + text_fg).properties(
+            # Solid baseline underneath the chart bars
+            base_axis = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color="#FFFFFF", strokeWidth=2.5).encode(y="y:Q")
+
+            compact_chart = (base_axis + hit_bars + ref_line + text_fg).properties(
                 height=130, width=310
             ).configure(background="transparent").configure_view(strokeWidth=0)
 
@@ -587,7 +592,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         grouped_props = p_props.groupby("Prop Name")
         prop_names_list = list(grouped_props.groups.keys())
 
-        # SOLID PURE-WHITE TABS FOR MULTI-PROP PLAYERS
         if len(prop_names_list) > 1:
             prop_tabs = st.tabs([f"{pn}" for pn in prop_names_list])
             for t_idx, prop_name in enumerate(prop_names_list):
@@ -596,7 +600,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         else:
             render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list[0], grouped_props.get_group(prop_names_list[0]))
 
-# FULLY UNIFIED & CONDENSED MASTER BLOCK WITH YOUR EXACT REQUESTED CONTAINER DIV
+# FULLY UNIFIED & CONDENSED MASTER BLOCK INSIDE THE EXACT CONTAINER DIV
 def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_name, p_group):
     dk_row = p_group[p_group["Book"] == "DraftKings"]
     fd_row = p_group[p_group["Book"] == "FanDuel"]
@@ -625,14 +629,14 @@ def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop
     ev_val = primary_row['EV']
     win_prob = primary_row['Win Prob']
 
-    # 1. OPEN EXACT REQUESTED CONTAINER DIV (ALL WIDGET CONTENTS LIVES INSIDE THIS)
+    # 1. OPEN EXACT REQUESTED CONTAINER DIV
     st.markdown(
         f'<div style="background: rgb(12, 17, 28); border: 1.5px solid rgb(30, 40, 61); border-radius: 16px; padding: 18px 22px; margin-top: 8px; margin-bottom: 16px; box-shadow: rgba(0, 0, 0, 0.4) 0px 6px 16px;">',
         unsafe_allow_html=True
     )
 
-    # 2. TOP HEADER ROW (LEFT: PROP NAME | MIDDLE: CHART | RIGHT: POSITION FIRST, THEN NAME)
-    col_prop, col_chart, col_player = st.columns([1.0, 2.1, 1.2])
+    # 2. TOP HEADER ROW (LEFT: PROP TABS/NAME | MIDDLE: CHART WITH BASELINE | RIGHT: POSITION ON TOP, NAME BELOW)
+    col_prop, col_chart, col_player = st.columns([1.1, 2.0, 1.1])
     
     with col_prop:
         st.markdown(f'<div style="font-size:1.35rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px; margin-top:16px;">{prop_name}</div>', unsafe_allow_html=True)

@@ -411,22 +411,23 @@ def render_prop_hit_rate_chart_inline(base_prop_name, grp):
 
             max_val = max(t_df["Value"]) if not t_df.empty else 5.0
             max_line = grp["Vegas Line"].max()
-            y_max = max(max_val * 1.3, max_line * 1.4, 3.0)
+            y_max = max(max_val * 1.35, max_line * 1.45, 3.0)
 
-            hit_bars = alt.Chart(t_df).mark_bar(size=14, cornerRadius=2, strokeWidth=0).encode(
-                x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=0, labelFontWeight="bold", labelColor="#94A3B8", labelFontSize=9)),
+            hit_bars = alt.Chart(t_df).mark_bar(size=22, cornerRadius=3, strokeWidth=0).encode(
+                x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=0, labelFontWeight="bold", labelColor="#94A3B8", labelFontSize=10)),
                 y=alt.Y("Value:Q", title=None, scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(labels=False, ticks=False, grid=False)),
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
-            text_fg = alt.Chart(t_df).mark_text(dy=-8, fontSize=10, fontWeight="bold", color="#FFFFFF").encode(
+            text_fg = alt.Chart(t_df).mark_text(dy=-10, fontSize=11, fontWeight="bold", color="#FFFFFF").encode(
                 x=alt.X("Date:N", sort=date_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f")
             )
 
-            ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(color="#FFFFFF", strokeWidth=1.2, strokeDash=[3, 3]).encode(y="y:Q")
+            ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(color="#FFFFFF", strokeWidth=1.5, strokeDash=[3, 3]).encode(y="y:Q")
 
+            # Increased height from 75 to 115 to fill the block vertically
             inline_chart = (hit_bars + ref_line + text_fg).properties(
-                height=75, width=280
+                height=115, width=320
             ).configure(background="transparent").configure_view(strokeWidth=0)
 
             return inline_chart

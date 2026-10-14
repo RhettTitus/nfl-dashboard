@@ -5,15 +5,12 @@ import re
 from datetime import datetime, timedelta
 import altair as alt
 
-st.set_page_config(page_title="Props.Cash NFL Analytics", layout="wide", page_icon="🏈")
+st.set_page_config(page_title="Props.Cash NFL Analytics", layout="wide", page_icon="🏈", initial_sidebar_state="expanded")
 
 # --------------------------------------------------------------------------
-# TOGGLEABLE VIEWPORT (MOBILE PHONE VS. DESKTOP WIDE MODE)
+# RESPONSIVE, UNRESTRICTED MOBILE-FIRST CSS THEME
 # --------------------------------------------------------------------------
-is_desktop = st.sidebar.toggle("🖥️ Desktop Wide Mode", value=False)
-max_w_css = "100%" if is_desktop else "600px"
-
-css_template = """
+st.markdown("""
 <style>
 /* Pure Dark Background */
 .stApp {
@@ -21,13 +18,13 @@ css_template = """
     color: #F8FAFC !important;
 }
 
-/* Dynamic Container Padding */
+/* Fluid Container Padding (No Clipping) */
 .block-container {
-    padding-top: 1rem !important;
-    padding-bottom: 1rem !important;
-    padding-left: 0.8rem !important;
-    padding-right: 0.8rem !important;
-    max-width: MAX_WIDTH_TOKEN !important;
+    padding-top: 1.5rem !important;
+    padding-bottom: 2rem !important;
+    padding-left: 2% !important;
+    padding-right: 2% !important;
+    max-width: 1300px !important;
     margin: auto !important;
 }
 
@@ -47,6 +44,9 @@ div[data-baseweb="select"] * {
     color: #FFFFFF !important;
     font-size: 0.88rem !important;
     font-weight: 700 !important;
+}
+div[data-baseweb="popover"] {
+    background-color: #121824 !important;
 }
 
 /* PROPS.CASH PILL TABS */
@@ -85,7 +85,7 @@ div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {
     display: none !important;
 }
 
-/* Compact Mobile Checkboxes */
+/* Checkbox Touch Target */
 div[data-testid="stCheckbox"] {
     background: transparent !important;
     border: none !important;
@@ -102,8 +102,7 @@ div[data-testid="stCheckbox"] label p {
     color: #94A3B8 !important;
 }
 </style>
-"""
-st.markdown(css_template.replace("MAX_WIDTH_TOKEN", max_w_css), unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 DATA_FOLDER = "./data"
 os.makedirs(DATA_FOLDER, exist_ok=True)
@@ -299,75 +298,8 @@ def load_visualizer_data(target_sheets):
     if not all_rows: return pd.DataFrame()
     return pd.concat(all_rows, ignore_index=True)
 
-def tag_best_line_advantages(df):
-    if df.empty: return df
-    df["Is_Best_Line"] = False
-    df["Line_Adv_Note"] = ""
-
-    def parse_ev_float(v):
-        try: return float(str(v).replace("%", "").strip())
-        except: return -1.0
-    
-    df["_ev_num"] = df["EV"].apply(parse_ev_float)
-
-    for (p_name, prop_n), grp in df.groupby(["Player", "Prop Name"]):
-        if len(grp) > 1:
-            side = grp["Pick"].iloc[0]
-            if side == "Over":
-                min_line = grp["Vegas Line"].min()
-                candidates = grp[grp["Vegas Line"] == min_line]
-                best_idx = candidates["_ev_num"].idxmax()
-                diff = grp["Vegas Line"].max() - min_line
-                df.loc[best_idx, "Is_Best_Line"] = True
-                df.loc[best_idx, "Line_Adv_Note"] = f"⭐ BEST LINE (+{diff:.1f} adv)" if diff > 0 else "⭐ BEST ODDS"
-            else:
-                max_line = grp["Vegas Line"].max()
-                candidates = grp[grp["Vegas Line"] == max_line]
-                best_idx = candidates["_ev_num"].idxmax()
-                diff = max_line - grp["Vegas Line"].min()
-                df.loc[best_idx, "Is_Best_Line"] = True
-                df.loc[best_idx, "Line_Adv_Note"] = f"⭐ BEST LINE (+{diff:.1f} adv)" if diff > 0 else "⭐ BEST ODDS"
-        elif len(grp) == 1:
-            idx = grp.index[0]
-            if grp.loc[idx, "_ev_num"] >= 0.05:
-                df.loc[idx, "Is_Best_Line"] = True
-                df.loc[idx, "Line_Adv_Note"] = "⭐ TOP VALUE"
-
-    return df
-
-def render_gambly_copy_box(df, box_title="📋 Gambly / Tracker Copy Slip"):
-    with st.expander(box_title, expanded=False):
-        c_book = st.selectbox(
-            "Select Sportsbook for Copy Slip:",
-            ["DraftKings", "FanDuel", "All Books (Combined)"],
-            key=f"cb_{box_title}"
-        )
-        
-        slip_df = df.copy()
-        if c_book != "All Books (Combined)":
-            slip_df = slip_df[slip_df["Book"] == c_book]
-            
-        slip_lines = []
-        for _, r in slip_df.iterrows():
-            p = str(r["Player"]).strip()
-            side = str(r["Pick"]).strip()
-            line = format_clean_decimal(r["Vegas Line"])
-            prop = str(r["Prop Name"]).strip()
-            
-            bet_str = format_gambly_bet_string(p, side, line, prop)
-            if bet_str and "nan" not in bet_str.lower():
-                slip_lines.append(bet_str)
-                
-        slip_lines = list(dict.fromkeys(slip_lines))
-        
-        if slip_lines:
-            st.caption(f"Showing **{len(slip_lines)}** {c_book} bets (Click icon in top-right to copy):")
-            st.code("\n".join(slip_lines), language="text")
-        else:
-            st.info(f"No bets available for {c_book} under current filters.")
-
 # --------------------------------------------------------------------------
-# SCHEMA-COMPLIANT ALTAIR CHART
+# SAFE SCHEMA-COMPLIANT ALTAIR CHART
 # --------------------------------------------------------------------------
 def render_exact_props_cash_chart(base_prop_name, grp):
     last_5_raw = ""
@@ -400,6 +332,7 @@ def render_exact_props_cash_chart(base_prop_name, grp):
                     "Date": d_str, 
                     "Value": val, 
                     "Result": "Over Hit" if val >= primary_line else "Under Miss",
+                    "Baseline": 0.0,
                     "VegasLine": primary_line
                 })
 
@@ -415,11 +348,27 @@ def render_exact_props_cash_chart(base_prop_name, grp):
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
+            text_bg = alt.Chart(t_df).mark_text(
+                dy=-8, baseline="bottom", fontSize=11.5, fontWeight="900", color="#07090E", stroke="#07090E", strokeWidth=5
+            ).encode(
+                x=alt.X("Date:N", sort=date_labels),
+                y=alt.Y("Baseline:Q"),
+                text=alt.Text("Value:Q", format=".1f")
+            )
+
+            text_fg = alt.Chart(t_df).mark_text(
+                dy=-8, baseline="bottom", fontSize=11.5, fontWeight="900", color="#FFFFFF"
+            ).encode(
+                x=alt.X("Date:N", sort=date_labels),
+                y=alt.Y("Baseline:Q"),
+                text=alt.Text("Value:Q", format=".1f")
+            )
+
             ref_line = alt.Chart(t_df).mark_rule(
                 color="#FFFFFF", strokeWidth=1.5, strokeDash=[4, 4]
             ).encode(y=alt.Y("VegasLine:Q"))
 
-            final_chart = alt.layer(hit_bars, ref_line).properties(
+            final_chart = alt.layer(hit_bars, ref_line, text_bg, text_fg).properties(
                 height=190
             ).configure(
                 background="transparent"
@@ -430,24 +379,30 @@ def render_exact_props_cash_chart(base_prop_name, grp):
             st.altair_chart(final_chart, use_container_width=True)
 
 # --------------------------------------------------------------------------
-# FULL PROPS.CASH DASHBOARD RENDERER
+# FULL PROPS.CASH DASHBOARD RENDERER (WITH ALL PLAYERS LISTED IN DROPDOWN)
 # --------------------------------------------------------------------------
 def render_props_cash_view(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
 
-    f_col1, f_col2 = st.columns([1, 1])
+    f_col1, f_col2, f_col3 = st.columns([1, 1, 1])
     with f_col1:
         team_list = ["All Teams"] + sorted(combined_df[team_col].dropna().astype(str).unique().tolist()) if team_col else ["All Teams"]
-        selected_team = st.selectbox("Team:", team_list, label_visibility="collapsed")
+        selected_team = st.selectbox("Team:", team_list)
     with f_col2:
+        pos_list = ["All Positions", "QB", "RB", "WR", "TE"] if pos_col else ["All Positions"]
+        selected_pos = st.selectbox("Position:", pos_list)
+    with f_col3:
         player_pool = combined_df.copy()
         if team_col and selected_team != "All Teams":
             player_pool = player_pool[player_pool[team_col].astype(str) == selected_team]
+        if pos_col and selected_pos != "All Positions":
+            player_pool = player_pool[player_pool[pos_col].astype(str).str.contains(selected_pos, case=False, na=False)]
+        
         avail_players = sorted(player_pool["Player"].dropna().unique().tolist())
-        selected_player = st.selectbox("Player:", avail_players, label_visibility="collapsed")
+        selected_player = st.selectbox("Select Player:", avail_players if avail_players else ["No Players Found"])
 
-    if not selected_player: return
+    if not selected_player or selected_player == "No Players Found": return
     p_records = combined_df[combined_df["Player"] == selected_player].copy()
     if p_records.empty: return
 
@@ -500,41 +455,70 @@ def render_props_cash_view(combined_df, is_alt_mode=False):
     if not prop_rows: return
     props_df = pd.DataFrame(prop_rows).drop_duplicates(subset=["Book", "Prop Name", "Vegas Line"])
 
-    unique_players = sorted(props_df["Player"].unique())
-    for player in unique_players:
-        p_props = props_df[props_df["Player"] == player]
-        team_tag = p_props["Team"].iloc[0] if not p_props.empty else ""
-        depth_tag = p_props["Position"].iloc[0] if not p_props.empty and p_props["Position"].iloc[0] else ""
-        headshot_url = get_headshot_url(player)
+    # TAP-TO-ADD GAMBLY SLIPS
+    selected_dk_bets = []
+    selected_fd_bets = []
 
-        grouped_props = p_props.groupby("Prop Name")
-        prop_names_list = list(grouped_props.groups.keys())
+    for _, r_check in props_df.iterrows():
+        chk_id = f"chk_{r_check['Player']}_{r_check['Book']}_{r_check['Prop Name']}_{format_clean_decimal(r_check['Vegas Line'])}"
+        if st.session_state.get(chk_id, False):
+            bet_line = format_gambly_bet_string(r_check['Player'], r_check['Pick'], r_check['Vegas Line'], r_check['Prop Name'])
+            if r_check['Book'] == 'DraftKings': selected_dk_bets.append(bet_line)
+            elif r_check['Book'] == 'FanDuel': selected_fd_bets.append(bet_line)
 
-        # HERO PLAYER CARD
-        st.markdown(f"""
-        <div style="background:#0D111A; border:1px solid #1E283D; border-radius:14px; padding:14px 18px; margin-bottom:12px;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-size:1.35rem; font-weight:900; color:#FFFFFF;">{player}</div>
-                    <div style="font-size:0.85rem; color:#8F9CAE; font-weight:700;">{team_tag} • ({depth_tag})</div>
-                </div>
-                <div>
-                    <img src="{headshot_url}" style="width:65px; height:65px; border-radius:50%; object-fit:cover; border:2px solid #00DF81; background:#1C2436;">
-                </div>
+    selected_dk_bets = list(dict.fromkeys(selected_dk_bets))
+    selected_fd_bets = list(dict.fromkeys(selected_fd_bets))
+
+    with st.expander("📋 Interactive Gambly Slips (Tap '➕ Add to Slip' Below)", expanded=(len(selected_dk_bets) > 0 or len(selected_fd_bets) > 0)):
+        col_clear, _ = st.columns([1, 4])
+        with col_clear:
+            if st.button("🗑️ Clear Selected Slips", key=f"clr_slips_{is_alt_mode}"):
+                for k in list(st.session_state.keys()):
+                    if k.startswith("chk_"): st.session_state[k] = False
+                st.rerun()
+
+        col_dk_slip, col_fd_slip = st.columns(2)
+        with col_dk_slip:
+            st.markdown("<span style='color:#00E676; font-weight:800;'>🟢 DraftKings Slip</span>", unsafe_allow_html=True)
+            if selected_dk_bets: st.code("\n".join(selected_dk_bets), language="text")
+            else: st.caption("No DraftKings bets selected yet.")
+        with col_fd_slip:
+            st.markdown("<span style='color:#0091FF; font-weight:800;'>🔵 FanDuel Slip</span>", unsafe_allow_html=True)
+            if selected_fd_bets: st.code("\n".join(selected_fd_bets), language="text")
+            else: st.caption("No FanDuel bets selected yet.")
+
+    team_tag = props_df["Team"].iloc[0]
+    depth_tag = props_df["Position"].iloc[0]
+    player_depth_label = f"({depth_tag})" if depth_tag else ""
+    headshot_url = get_headshot_url(selected_player)
+
+    grouped_props = props_df.groupby("Prop Name")
+    prop_names_list = list(grouped_props.groups.keys())
+
+    # HERO PLAYER CARD
+    st.markdown(f"""
+    <div style="background:#0D111A; border:1px solid #1E283D; border-radius:14px; padding:16px 20px; margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-size:1.60rem; font-weight:900; color:#FFFFFF;">{selected_player}</div>
+                <div style="font-size:0.95rem; color:#8F9CAE; font-weight:700;">{team_tag} • {player_depth_label}</div>
+            </div>
+            <div>
+                <img src="{headshot_url}" style="width:75px; height:75px; border-radius:50%; object-fit:cover; border:2.5px solid #00E676; background:#1C2436;">
             </div>
         </div>
-        """, unsafe_allow_html=True)
+    </div>
+    """, unsafe_allow_html=True)
 
-        if len(prop_names_list) > 1:
-            tabs_obj = st.tabs([pn for pn in prop_names_list])
-            for t_idx, prop_name in enumerate(prop_names_list):
-                with tabs_obj[t_idx]:
-                    render_props_cash_tab_content(player, prop_name, grouped_props.get_group(prop_name))
-        else:
-            render_props_cash_tab_content(player, prop_names_list[0], grouped_props.get_group(prop_names_list[0]))
+    if len(prop_names_list) > 1:
+        tabs_obj = st.tabs([pn for pn in prop_names_list])
+        for t_idx, prop_name in enumerate(prop_names_list):
+            with tabs_obj[t_idx]:
+                render_props_cash_tab_content(selected_player, prop_name, grouped_props.get_group(prop_name))
+    else:
+        render_props_cash_tab_content(selected_player, prop_names_list[0], grouped_props.get_group(prop_names_list[0]))
 
 def render_props_cash_tab_content(player, prop_name, p_group):
-    # Enclose entire prop block in a border
     with st.container(border=True):
         dk_row = p_group[p_group["Book"] == "DraftKings"]
         fd_row = p_group[p_group["Book"] == "FanDuel"]
@@ -563,9 +547,9 @@ def render_props_cash_tab_content(player, prop_name, p_group):
         ev_val = primary_row['EV']
         win_prob = primary_row['Win Prob']
 
-        # UNIFIED COCKPIT CARD (6-PACK + CONTEXT PILLS ALL IN THE TOP SLOT)
+        # UNIFIED COCKPIT CARD
         st.markdown(f"""
-        <div style="background:#0C111C; border:1px solid #1D263B; border-radius:12px; padding:16px 18px; margin-bottom:12px; box-shadow:0 4px 10px rgba(0,0,0,0.3);">
+        <div style="background:#0C111C; border:1.5px solid #1D263B; border-radius:12px; padding:16px 18px; margin-bottom:12px; box-shadow:0 4px 10px rgba(0,0,0,0.3);">
             <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap:10px; align-items:center; margin-bottom:14px;">
                 <div><div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">L5 AVG</div><div style="font-size:18px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_disp}</div></div>
                 <div><div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">LINE</div><div style="font-size:18px; font-weight:900; color:#FFFFFF;">{line_display} &gt;</div></div>
@@ -588,15 +572,13 @@ def render_props_cash_tab_content(player, prop_name, p_group):
         </div>
         """, unsafe_allow_html=True)
 
-        # EXACT CHART WITH BLACK DOTTED LINE
         render_exact_props_cash_chart(prop_name, p_group)
 
-        # DRAFTKINGS & FANDUEL ODDS ROW WITH ADD TO SLIP
         col_dk, col_fd = st.columns(2)
         with col_dk:
             if not dk_row.empty:
                 r_b = dk_row.iloc[0]
-                chk_k = f"m_chk_{r_b['Player']}_{r_b['Book']}_{r_b['Prop Name']}_{format_clean_decimal(r_b['Vegas Line'])}"
+                chk_k = f"m_chk_{r_b['Player']}_DK_{r_b['Prop Name']}_{format_clean_decimal(r_b['Vegas Line'])}"
                 st.markdown(f"""
                 <div style="background:#101624; border:1px solid #243048; border-radius:8px; padding:7px 10px;">
                     <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:800;">
@@ -615,7 +597,7 @@ def render_props_cash_tab_content(player, prop_name, p_group):
         with col_fd:
             if not fd_row.empty:
                 r_b = fd_row.iloc[0]
-                chk_k = f"m_chk_{r_b['Player']}_{r_b['Book']}_{r_b['Prop Name']}_{format_clean_decimal(r_b['Vegas Line'])}"
+                chk_k = f"m_chk_{r_b['Player']}_FD_{r_b['Prop Name']}_{format_clean_decimal(r_b['Vegas Line'])}"
                 st.markdown(f"""
                 <div style="background:#101624; border:1px solid #243048; border-radius:8px; padding:7px 10px;">
                     <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:800;">
@@ -651,180 +633,4 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
     if all_curated.empty:
         st.warning("No plays available.")
     else:
-        sanitized_plays = []
-        for _, r_cand in all_curated.iterrows():
-            p_n, line_f = extract_sanitized_prop_and_line(r_cand)
-            if not p_n or line_f is None: continue
-            
-            proj = r_cand.get("Projection")
-            if pd.isna(proj) or str(proj).strip().lower() in ["nan", "none", "", "unposted"]: continue
-                
-            try:
-                ev_str = str(r_cand.get("EV", "-")).replace("%", "").strip()
-                ev_f = float(ev_str)
-                
-                m_prob_raw = r_cand.get("Model Win Prob")
-                m_prob_f = float(str(m_prob_raw).replace("%", "").strip()) if pd.notna(m_prob_raw) else 0.50
-                m_prob_norm = m_prob_f if abs(m_prob_f) <= 1.0 else m_prob_f / 100.0
-
-                b_prob_calc = get_or_calculate_book_prob(r_cand.get("Book Win Prob"), r_cand.get("Odds"))
-
-                r_cand_copy = r_cand.copy()
-                r_cand_copy["Clean_Prop"] = p_n
-                r_cand_copy["Clean_Line"] = line_f
-                r_cand_copy["_ev_val"] = ev_f
-                r_cand_copy["_model_prob"] = m_prob_norm
-                r_cand_copy["_book_prob"] = b_prob_calc if b_prob_calc is not None else 0.50
-                sanitized_plays.append(r_cand_copy)
-            except:
-                pass
-
-        if not sanitized_plays:
-            st.warning("No valid plays found.")
-            st.stop()
-
-        clean_curated_df = pd.DataFrame(sanitized_plays)
-
-        c_mode = st.radio(
-            "Filter Conviction Style:",
-            [
-                "🛡️ High Probability Value (Win Prob ≥ 50%) — Best for Straight Bets & Parlays",
-                "🚀 Plus-Money Ceiling Flyers (All High EV Plays — Includes Alt Lines)"
-            ],
-            index=0
-        )
-
-        if "High Probability" in c_mode:
-            best_plays = clean_curated_df[
-                (clean_curated_df["_model_prob"] >= 0.50) & 
-                (clean_curated_df["_book_prob"] >= 0.40) &
-                (clean_curated_df["_ev_val"] >= 0.04)
-            ].sort_values(by="_ev_val", ascending=False).drop_duplicates(subset=["Player", "Clean_Prop", "Clean_Line", "Book"]).head(15)
-        else:
-            best_plays = clean_curated_df[
-                clean_curated_df["Action"].astype(str).str.contains("MAX|DUAL|ANCHOR|STRONG", case=False, na=False) |
-                (clean_curated_df["_ev_val"] >= 0.06)
-            ].sort_values(by="_ev_val", ascending=False).drop_duplicates(subset=["Player", "Clean_Prop", "Clean_Line", "Book"]).head(15)
-
-        if best_plays.empty:
-            st.info("No plays currently clearing the selected conviction threshold.")
-        else:
-            with st.expander("📋 Gambly Copy Slip (Clean Format by Sportsbook)", expanded=True):
-                best_c_book = st.selectbox(
-                    "Select Sportsbook for Copy Slip:",
-                    ["DraftKings", "FanDuel", "All Books (Combined)"],
-                    key="best_copy_book_select"
-                )
-                
-                b_slip_df = best_plays.copy()
-                if best_c_book != "All Books (Combined)":
-                    b_slip_df = b_slip_df[b_slip_df["Book"] == best_c_book]
-                    
-                b_slip_lines = []
-                for _, r_best in b_slip_df.iterrows():
-                    p = str(r_best["Player"]).strip()
-                    side = "Over" if pd.isna(r_best.get("Side")) or str(r_best.get("Side")).strip().lower() in ["nan", "none", ""] else str(r_best.get("Side")).strip()
-                    line = format_clean_decimal(r_best["Clean_Line"])
-                    prop = str(r_best["Clean_Prop"]).strip()
-                    
-                    bet_str = format_gambly_bet_string(p, side, line, prop)
-                    if bet_str and "nan" not in bet_str.lower():
-                        b_slip_lines.append(bet_str)
-                        
-                b_slip_lines = list(dict.fromkeys(b_slip_lines))
-                
-                if b_slip_lines:
-                    st.caption(f"Showing **{len(b_slip_lines)}** {best_c_book} bets (Click icon in top-right to copy):")
-                    st.code("\n".join(b_slip_lines), language="text")
-                else:
-                    st.info(f"No bets found for {best_c_book}.")
-
-            for rank, (_, row) in enumerate(best_plays.iterrows(), 1):
-                p_name = row["Player"]
-                prop_n = row["Clean_Prop"]
-                line_display = format_clean_decimal(row["Clean_Line"])
-                book_s = get_book_styled(row["Book"])
-                headshot_url = get_headshot_url(p_name)
-
-                side_raw = str(row.get("Side", "")).strip()
-                side_clean = "Over" if not side_raw or side_raw.lower() in ["nan", "none"] else side_raw
-                odds_clean = format_american_odds(row.get("Odds", "-"))
-                odds_str = f" ({odds_clean})" if odds_clean != "-" else ""
-
-                calc_bp_best = get_or_calculate_book_prob(row.get("Book Win Prob"), row.get("Odds"))
-                book_prob = format_percentage(calc_bp_best) if calc_bp_best is not None else "-"
-                model_prob = format_percentage(row.get("_model_prob"))
-                ev_clean = format_percentage(row.get("EV"), is_ev=True)
-
-                st.markdown(f"""
-                <div style="background:#0D111A; border:1px solid #1E283D; border-radius:10px; padding:10px 14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <img src="{headshot_url}" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:1.5px solid #00E676;">
-                        <div>
-                            <div style="font-size:13px; font-weight:900; color:#FFFFFF;">#{rank} {p_name}</div>
-                            <div style="font-size:11px; color:#8F9CAE;">{prop_n} [{book_s}]</div>
-                        </div>
-                    </div>
-                    <div style="text-align:right;">
-                        <div style="font-size:13px; font-weight:900; color:#00E676;">{ev_clean} EV</div>
-                        <div style="font-size:11px; font-weight:800; color:#FFFFFF;">{side_clean} {line_display} <span style="color:#8F9CAE;">{odds_str}</span></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-elif app_mode == "📋 Master EV Tables":
-    st.markdown("<h2 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>📋 Master EV Tables & Projections</h2>", unsafe_allow_html=True)
-
-    tab_names = [s for s in excel_data.sheet_names if s != "How To Use"]
-    tabs = st.tabs(tab_names)
-
-    for i, sheet_name in enumerate(tab_names):
-        with tabs[i]:
-            df = pd.read_excel(excel_data, sheet_name=sheet_name)
-            if df.empty:
-                st.info("No data in this sheet.")
-                continue
-
-            tf1, tf2, tf3, tf4, tf5 = st.columns([1, 1, 1, 1, 2])
-            with tf1:
-                t_list = ["All Teams"] + sorted(df["Team"].dropna().astype(str).unique().tolist()) if "Team" in df.columns else ["All Teams"]
-                f_team = st.selectbox(f"Team ({sheet_name}):", t_list, key=f"t_{sheet_name}")
-            with tf2:
-                pos_col = next((c for c in ["Pos", "Position"] if c in df.columns), None)
-                p_list = ["All Positions", "QB", "RB", "WR", "TE"] if pos_col else ["All Positions"]
-                f_pos = st.selectbox(f"Pos ({sheet_name}):", p_list, key=f"p_{sheet_name}")
-            with tf3:
-                side_list = ["All Sides", "Over", "Under"] if "Side" in df.columns else ["All Sides"]
-                f_side = st.selectbox(f"Side ({sheet_name}):", side_list, key=f"s_{sheet_name}")
-            with tf4:
-                act_col = "Action" if "Action" in df.columns else None
-                act_list = ["All Actions", "MAX BET", "ANCHOR", "STRONG BET"] if act_col else ["All Actions"]
-                f_act = st.selectbox(f"Action ({sheet_name}):", act_list, key=f"a_{sheet_name}")
-            with tf5:
-                f_search = st.text_input(f"🔍 Search ({sheet_name}):", "", key=f"sr_{sheet_name}")
-
-            if f_team != "All Teams" and "Team" in df.columns:
-                df = df[df["Team"].astype(str) == f_team]
-            if f_pos != "All Positions" and pos_col:
-                df = df[df[pos_col].astype(str).str.contains(f_pos, case=False, na=False)]
-            if f_side != "All Sides" and "Side" in df.columns:
-                df = df[df["Side"].astype(str) == f_side]
-            if f_act != "All Actions" and act_col:
-                df = df[df["Action"].astype(str).str.contains(f_act, case=False, na=False)]
-            if f_search:
-                mask = df.astype(str).apply(lambda row: row.str.contains(f_search, case=False).any(), axis=1)
-                df = df[mask]
-
-            for col in df.columns:
-                if "EV" in col or "Market EV" in col:
-                    df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=True))
-                elif any(w in col for w in ["Prob", "Probability", "Win Prob"]):
-                    df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=False))
-                elif any(w in col for w in ["Line", "Projection", "Calibrated Proj"]):
-                    df[col] = df[col].apply(format_clean_decimal)
-                elif col == "Odds":
-                    df[col] = df[col].apply(format_american_odds)
-
-            df = df.drop(columns=[c for c in ["GameSortKey", "SortScore", "CleanName"] if c in df.columns])
-
-            st.dataframe(df, use_container_width=True, height=380)
+        san

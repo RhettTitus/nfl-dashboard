@@ -8,7 +8,7 @@ import altair as alt
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# HIGH-CONTRAST CSS THEME (KILLS TAB BARS COMPLETELY)
+# PROPS.CASH HIGH-CONTRAST CSS THEME
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -16,17 +16,6 @@ html, body, [class*="css"], .stApp {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     background-color: #07090E !important;
     color: #F8FAFC !important;
-}
-
-/* KILLS THE EMPTY TOP BUBBLE / TAB BAR COMPLETELY */
-div[data-baseweb="tab-list"],
-div[data-testid="stTabs"] > div:first-child,
-div[data-testid="stTabs"] {
-    display: none !important;
-    height: 0px !important;
-    padding: 0px !important;
-    margin: 0px !important;
-    border: none !important;
 }
 
 /* Crisp Headings */
@@ -49,6 +38,21 @@ div[data-baseweb="select"] * {
 }
 div[data-baseweb="popover"] {
     background-color: #121824 !important;
+}
+
+/* Clean Prop Buttons inside the Top Bubble */
+div[data-testid="stHorizontalBlock"] button[kind="secondary"] {
+    background-color: #151D2A !important;
+    border: 1.5px solid #2B3A52 !important;
+    border-radius: 10px !important;
+    padding: 6px 14px !important;
+    color: #FFFFFF !important;
+    font-weight: 800 !important;
+    font-size: 0.85rem !important;
+}
+div[data-testid="stHorizontalBlock"] button[kind="secondary"]:hover {
+    border-color: #00E676 !important;
+    color: #00E676 !important;
 }
 
 /* Checkbox Styling inside Book Cards */
@@ -386,7 +390,8 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
 
             max_val = max(t_df["Value"]) if not t_df.empty else 5.0
             max_line = grp["Vegas Line"].max()
-            y_max = max(max_val * 1.45, max_line * 1.55, 3.5)
+            # Scaling forces all numbers safely above the white dotted line
+            y_max = max(max_val * 1.5, max_line * 1.6, 4.0)
 
             hit_bars = alt.Chart(t_df).mark_bar(size=18, cornerRadius=3, strokeWidth=0).encode(
                 x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=0, labelFontWeight="bold", labelColor="#94A3B8", labelFontSize=9.5)),
@@ -394,14 +399,17 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
+            # Numbers clearly positioned above bars & line
             text_fg = alt.Chart(t_df).mark_text(dy=-10, fontSize=10.5, fontWeight="bold", color="#FFFFFF").encode(
                 x=alt.X("Date:N", sort=date_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f")
             )
 
+            # DOTTED WHITE LINE
             ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(
                 color="#FFFFFF", strokeWidth=1.8, strokeDash=[4, 4]
             ).encode(y="y:Q")
 
+            # CRISP SOLID BASELINE AT THE VERY BOTTOM
             base_axis = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color="#FFFFFF", strokeWidth=2.5).encode(y="y:Q")
 
             compact_chart = (base_axis + hit_bars + ref_line + text_fg).properties(
@@ -515,43 +523,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         st.info("No props available under this filter.")
         return
 
-    # TAP-TO-ADD GAMBLY SLIPS
-    selected_dk_bets = []
-    selected_fd_bets = []
-
-    for _, r_check in props_df.iterrows():
-        chk_id = f"chk_{r_check['Player']}_{r_check['Book']}_{r_check['Prop Name']}_{format_clean_decimal(r_check['Vegas Line'])}"
-        if st.session_state.get(chk_id, False):
-            bet_line = format_gambly_bet_string(r_check['Player'], r_check['Pick'], r_check['Vegas Line'], r_check['Prop Name'])
-            if r_check['Book'] == 'DraftKings': selected_dk_bets.append(bet_line)
-            elif r_check['Book'] == 'FanDuel': selected_fd_bets.append(bet_line)
-
-    selected_dk_bets = list(dict.fromkeys(selected_dk_bets))
-    selected_fd_bets = list(dict.fromkeys(selected_fd_bets))
-
-    with st.expander("📋 Interactive Gambly Slips (Tap '➕ Add to Slip' Below)", expanded=(len(selected_dk_bets) > 0 or len(selected_fd_bets) > 0)):
-        col_clear, _ = st.columns([1, 4])
-        with col_clear:
-            if st.button("🗑️ Clear Selected Slips", key=f"clr_slips_{is_alt_mode}"):
-                for k in list(st.session_state.keys()):
-                    if k.startswith("chk_"): st.session_state[k] = False
-                st.rerun()
-
-        col_dk_slip, col_fd_slip = st.columns(2)
-        with col_dk_slip:
-            st.markdown("<span style='color:#00E676; font-weight:800;'>🟢 DraftKings Slip</span>", unsafe_allow_html=True)
-            if selected_dk_bets:
-                st.code("\n".join(selected_dk_bets), language="text")
-            else:
-                st.caption("No DraftKings bets selected yet.")
-
-        with col_fd_slip:
-            st.markdown("<span style='color:#0091FF; font-weight:800;'>🔵 FanDuel Slip</span>", unsafe_allow_html=True)
-            if selected_fd_bets:
-                st.code("\n".join(selected_fd_bets), language="text")
-            else:
-                st.caption("No FanDuel bets selected yet.")
-
     unique_players = sorted(props_df["Player"].unique())
 
     for player in unique_players:
@@ -564,7 +535,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         grouped_props = p_props.groupby("Prop Name")
         prop_names_list = list(grouped_props.groups.keys())
 
-        # Selectbox or default to the first prop without creating empty tablist bars
+        # Track active prop selection for this player
         state_key = f"prop_sel_{player}"
         if state_key not in st.session_state or st.session_state[state_key] not in prop_names_list:
             st.session_state[state_key] = prop_names_list[0]
@@ -572,7 +543,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         chosen_prop = st.session_state[state_key]
         render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list, chosen_prop, grouped_props.get_group(chosen_prop))
 
-# FULLY UNIFIED & CONDENSED MASTER BLOCK WITH PROPS FULLY EMBEDDED INSIDE THE BOX
+# TOP BUBBLE WIDGET WITH PROPS INSIDE & POSITION ON TOP OF PLAYER NAME
 def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list, active_prop, p_group):
     dk_row = p_group[p_group["Book"] == "DraftKings"]
     fd_row = p_group[p_group["Book"] == "FanDuel"]
@@ -601,37 +572,46 @@ def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop
     ev_val = primary_row['EV']
     win_prob = primary_row['Win Prob']
 
-    # 1. OPEN EXACT CONTAINER BOX - EVERYTHING LIVES INSIDE THIS DIV
+    # 1. TOP BUBBLE HOUSING PROPS (LEFT) AND POSITION/NAME (RIGHT)
     st.markdown(
-        f'<div style="background: rgb(12, 17, 28); border: 1.5px solid rgb(30, 40, 61); border-radius: 16px; padding: 18px 22px; margin-top: 8px; margin-bottom: 16px; box-shadow: rgba(0, 0, 0, 0.4) 0px 6px 16px;">',
+        f'<div style="background: rgb(12, 17, 28); border: 1.5px solid rgb(30, 40, 61); border-radius: 16px; padding: 12px 18px; margin-bottom: 10px; box-shadow: rgba(0, 0, 0, 0.4) 0px 6px 16px;">',
         unsafe_allow_html=True
     )
-
-    # 2. TOP HEADER ROW (LEFT: PROPS INSIDE | MIDDLE: CHART WITH BASELINE | RIGHT: POSITION ON TOP, NAME BELOW)
-    col_prop, col_chart, col_player = st.columns([1.1, 2.0, 1.1])
+    col_bubble_left, col_bubble_right = st.columns([1.5, 1.5])
     
-    with col_prop:
-        for pn in prop_names_list:
-            if st.button(pn, key=f"btn_{player}_{pn}"):
-                st.session_state[f"prop_sel_{player}"] = pn
-                st.rerun()
+    with col_bubble_left:
+        # PROPS LISTED HORIZONTALLY ON THE LEFT INSIDE THE BUBBLE
+        sub_cols = st.columns(len(prop_names_list))
+        for idx, pn in enumerate(prop_names_list):
+            with sub_cols[idx]:
+                if st.button(pn, key=f"btn_{player}_{pn}"):
+                    st.session_state[f"prop_sel_{player}"] = pn
+                    st.rerun()
 
-    with col_chart:
-        chart_obj = render_prop_hit_rate_chart_compact(active_prop, p_group)
-        if chart_obj:
-            st.altair_chart(chart_obj, use_container_width=True)
-
-    with col_player:
+    with col_bubble_right:
+        # RIGHT HAND SIDE: POSITION ON TOP, PLAYER NAME BELOW, HEADSHOT ON THE FAR RIGHT
         st.markdown(
-            f'<div style="display:flex; align-items:center; justify-content:flex-end; gap:12px; margin-top:4px;">'
+            f'<div style="display:flex; align-items:center; justify-content:flex-end; gap:12px;">'
             f'<div style="text-align:right;">'
-            f'<div style="font-size:0.92rem; color:#00E676; font-weight:800; letter-spacing:0.3px; margin-bottom:2px;">{player_depth_label}</div>'
-            f'<div style="font-size:1.35rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>'
+            f'<div style="font-size:0.92rem; color:#00E676; font-weight:800; letter-spacing:0.3px; margin-bottom:1px;">{player_depth_label}</div>'
+            f'<div style="font-size:1.30rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>'
             f'</div>'
-            f'<img src="{headshot_url}" style="width:70px; height:70px; border-radius:50%; object-fit:cover; border:2.5px solid #00E676; background:#1C2436; box-shadow:0 0 12px rgba(0,230,118,0.25);">'
+            f'<img src="{headshot_url}" style="width:58px; height:58px; border-radius:50%; object-fit:cover; border:2.5px solid #00E676; background:#1C2436; box-shadow:0 0 10px rgba(0,230,118,0.25);">'
             f'</div>',
             unsafe_allow_html=True
         )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # 2. MAIN CARD: CHART, METRICS & PILLS
+    st.markdown(
+        f'<div style="background: rgb(12, 17, 28); border: 1.5px solid rgb(30, 40, 61); border-radius: 16px; padding: 18px 22px; margin-bottom: 16px; box-shadow: rgba(0, 0, 0, 0.4) 0px 6px 16px;">',
+        unsafe_allow_html=True
+    )
+
+    # HIT RATE CHART IN THE MIDDLE
+    chart_obj = render_prop_hit_rate_chart_compact(active_prop, p_group)
+    if chart_obj:
+        st.altair_chart(chart_obj, use_container_width=True)
 
     st.markdown('<div style="height:1px; background:#1E283D; margin:14px 0;"></div>', unsafe_allow_html=True)
 

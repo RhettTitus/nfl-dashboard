@@ -3,39 +3,30 @@ import pandas as pd
 import os
 import re
 from datetime import datetime, timedelta
+import altair as alt
 
 st.set_page_config(page_title="Props.Cash NFL Analytics", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# RESPONSIVE, MOBILE-FIRST CSS THEME
+# RESPONSIVE PROPS.CASH CSS
 # --------------------------------------------------------------------------
-is_desktop = st.sidebar.toggle("🖥️ Desktop Wide Mode", value=False)
-max_w_css = "100%" if is_desktop else "600px"
-
 css_template = """
 <style>
-/* Pure Dark Background */
 .stApp {
     background-color: #07090E !important;
     color: #F8FAFC !important;
 }
-
-/* Dynamic Container Padding */
 .block-container {
     padding-top: 1rem !important;
     padding-bottom: 1rem !important;
-    padding-left: 0.8rem !important;
-    padding-right: 0.8rem !important;
-    max-width: MAX_WIDTH_TOKEN !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    max-width: 1300px !important;
     margin: auto !important;
 }
-
-/* Force All Headings to Pure White */
 h1, h2, h3, h4, h5, h6, p, div {
     color: #F8FAFC !important;
 }
-
-/* High-Contrast Filters */
 div[data-baseweb="select"] > div {
     background-color: #121824 !important;
     border: 1px solid #23304A !important;
@@ -47,8 +38,6 @@ div[data-baseweb="select"] * {
     font-size: 0.88rem !important;
     font-weight: 700 !important;
 }
-
-/* PROPS.CASH PILL TABS */
 div[data-testid="stTabs"] {
     background-color: transparent !important;
 }
@@ -83,8 +72,6 @@ div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] p {
 div[data-baseweb="tab-highlight"], div[data-baseweb="tab-border"] {
     display: none !important;
 }
-
-/* Compact Mobile Checkboxes */
 div[data-testid="stCheckbox"] {
     background: transparent !important;
     border: none !important;
@@ -102,7 +89,7 @@ div[data-testid="stCheckbox"] label p {
 }
 </style>
 """
-st.markdown(css_template.replace("MAX_WIDTH_TOKEN", max_w_css), unsafe_allow_html=True)
+st.markdown(css_template, unsafe_allow_html=True)
 
 DATA_FOLDER = "./data"
 os.makedirs(DATA_FOLDER, exist_ok=True)
@@ -299,7 +286,7 @@ def load_visualizer_data(target_sheets):
     return pd.concat(all_rows, ignore_index=True)
 
 # --------------------------------------------------------------------------
-# 100% STABLE NATIVE STREAMLIT CHART RENDERER (NO SCHEMA ERRORS EVER)
+# ROCK-SOLID SCHEMA-COMPLIANT ALTAIR CHART (WITH DASHED VEGAS LINE RESTORED)
 # --------------------------------------------------------------------------
 def render_exact_props_cash_chart(base_prop_name, grp):
     last_5_raw = ""
@@ -323,16 +310,66 @@ def render_exact_props_cash_chart(base_prop_name, grp):
                 base_d = datetime.now()
                 date_labels = [(base_d - timedelta(days=(total_g - i)*7)).strftime("%-m/%-d") for i in range(total_g)]
 
+            primary_line = float(grp["Vegas Line"].iloc[0])
+            
             trend_points = []
             for idx, val in enumerate(stats_list):
                 d_str = date_labels[idx] if idx < len(date_labels) else f"G{idx+1}"
-                trend_points.append({"Game": d_str, "Stat Value": val})
+                trend_points.append({
+                    "Date": d_str, 
+                    "Value": val, 
+                    "Result": "Over Hit" if val >= primary_line else "Under Miss",
+                    "Baseline": 0.0,
+                    "VegasLine": primary_line
+                })
 
-            t_df = pd.DataFrame(trend_points).set_index("Game")
-            primary_line = float(grp["Vegas Line"].iloc[0])
-            
-            st.caption(f"🎯 **Vegas Line Threshold:** `{primary_line}` (Dashed Line)")
-            st.bar_chart(t_df, color="#00E676", height=180, use_container_width=True)
+            t_df = pd.DataFrame(trend_points)
+
+            max_val = max(t_df["Value"])
+            if primary_line <= 3.0: y_max = max(max_val * 1.5, primary_line * 2.0, 3.5)
+            else: y_max = max(max_val * 1.35, primary_line * 1.45)
+
+            # 100% Safe Single-DataFrame Encoding (No Schema Errors)
+            base = alt.Chart(t_df)
+
+            hit_bars = base.mark_bar(size=28, cornerRadius=0, strokeWidth=0).encode(
+                x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=-90, labelColor="#94A3B8", labelFontSize=10)),
+                y=alt.Y("Value:Q", title=None, scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(labels=True, labelColor="#94A3B8", gridColor="#192333")),
+                color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
+            )
+
+            text_bg = base.mark_text(
+                dy=-8, baseline="bottom", fontSize=11.5, fontWeight="900", color="#07090E", stroke="#07090E", strokeWidth=5
+            ).encode(
+                x=alt.X("Date:N", sort=date_labels),
+                y=alt.Y("Baseline:Q"),
+                text=alt.Text("Value:Q", format=".1f")
+            )
+
+            text_fg = base.mark_text(
+                dy=-8, baseline="bottom", fontSize=11.5, fontWeight="900", color="#FFFFFF"
+            ).encode(
+                x=alt.X("Date:N", sort=date_labels),
+                y=alt.Y("Baseline:Q"),
+                text=alt.Text("Value:Q", format=".1f")
+            )
+
+            # RESTORED BLACK/WHITE DOTTED THRESHOLD LINE
+            ref_line = base.mark_rule(
+                color="#FFFFFF", strokeWidth=1.8, strokeDash=[4, 4]
+            ).encode(
+                y=alt.Y("VegasLine:Q")
+            )
+
+            final_chart = alt.layer(hit_bars, ref_line, text_bg, text_fg).properties(
+                height=190
+            ).configure(
+                background="transparent"
+            ).configure_view(
+                strokeWidth=0
+            )
+
+            st.altair_chart(final_chart, use_container_width=True)
 
 # --------------------------------------------------------------------------
 # FULL PROPS.CASH DASHBOARD RENDERER
@@ -467,17 +504,17 @@ def render_props_cash_tab_content(player, prop_name, p_group):
         ev_val = primary_row['EV']
         win_prob = primary_row['Win Prob']
 
-        # UNIFIED COCKPIT CARD
+        # UNIFIED 6-PACK GRID & CONTEXT PILLS LOCKED IN TOP SLOT (NO ALIGNMENT ISSUES)
         st.markdown(f"""
         <div style="background:#0C111C; border:1.5px solid #1D263B; border-radius:12px; padding:16px 18px; margin-bottom:12px; box-shadow:0 4px 10px rgba(0,0,0,0.3);">
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap:10px; align-items:center; margin-bottom:14px;">
-                <div><div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">L5 AVG</div><div style="font-size:18px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_disp}</div></div>
-                <div><div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">LINE</div><div style="font-size:18px; font-weight:900; color:#FFFFFF;">{line_display} &gt;</div></div>
-                <div><div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">PROP</div><div style="font-size:15px; font-weight:900; color:#FFFFFF;">{prop_name}</div></div>
-                <div><div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">HIT RATE</div><div style="font-size:18px; font-weight:900; color:{hit_color};">{hit_rate_disp}</div></div>
-                <div><div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">PROJECTION</div><div style="font-size:18px; font-weight:900; color:#00E676;">{proj_display}</div></div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 50px; gap:6px; align-items:center; margin-bottom:14px;">
+                <div><div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">L5 AVG</div><div style="font-size:17px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_disp}</div></div>
+                <div><div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">LINE</div><div style="font-size:17px; font-weight:900; color:#FFFFFF;">{line_display} &gt;</div></div>
+                <div><div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">PROP</div><div style="font-size:14px; font-weight:900; color:#FFFFFF;">{prop_name}</div></div>
+                <div><div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">HIT RATE</div><div style="font-size:17px; font-weight:900; color:{hit_color};">{hit_rate_disp}</div></div>
+                <div><div style="font-size:10px; color:#8F9CAE; font-weight:800; letter-spacing:0.5px;">PROJECTION</div><div style="font-size:17px; font-weight:900; color:#00E676;">{proj_display}</div></div>
                 <div style="text-align:center;">
-                    <div style="width:40px; height:40px; border-radius:50%; border:3px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:17px; background:#161E2E; box-shadow:0 0 12px rgba(0,230,118,0.35);">{grade_char}</div>
+                    <div style="width:38px; height:38px; border-radius:50%; border:3px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:16px; background:#161E2E; box-shadow:0 0 10px rgba(0,230,118,0.35);">{grade_char}</div>
                 </div>
             </div>
             <div style="height:1px; background:#1D263B; margin-bottom:12px;"></div>

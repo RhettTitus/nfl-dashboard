@@ -8,16 +8,14 @@ import altair as alt
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# PROPS.CASH HIGH-CONTRAST CSS THEME
+# HIGH-CONTRAST CSS THEME
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
-/* Clean Mobile System Font */
 html, body, [class*="css"], .stApp {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     background-color: #07090E !important;
     color: #F8FAFC !important;
-    -webkit-font-smoothing: antialiased !important;
 }
 
 /* Crisp Headings */
@@ -25,42 +23,6 @@ h1, h2, h3, h4, h5, h6 {
     color: #F8FAFC !important;
     font-weight: 800 !important;
     letter-spacing: 0.3px !important;
-}
-
-/* PURE WHITE / NEON GREEN TABS FOR INSIDE THE CARD */
-[data-testid="stTabs"] {
-    background-color: transparent !important;
-}
-[data-testid="stTabs"] div[data-baseweb="tab-list"] {
-    gap: 6px !important;
-    border-bottom: none !important;
-    background-color: transparent !important;
-    padding-bottom: 2px !important;
-}
-[data-testid="stTabs"] div[data-baseweb="tab-highlight"],
-[data-testid="stTabs"] div[data-baseweb="tab-border"] {
-    display: none !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"] {
-    background-color: #151D2A !important;
-    border: 1.5px solid #2B3A52 !important;
-    border-radius: 16px !important;
-    padding: 4px 12px !important;
-    margin-right: 4px !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"] * {
-    color: #FFFFFF !important;
-    font-size: 0.82rem !important;
-    font-weight: 800 !important;
-    opacity: 1 !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
-    background-color: #1F2E45 !important;
-    border: 2px solid #00E676 !important;
-    box-shadow: 0 0 8px rgba(0, 230, 118, 0.3) !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
-    color: #00E676 !important;
 }
 
 /* Selectbox Styling */
@@ -78,7 +40,7 @@ div[data-baseweb="popover"] {
     background-color: #121824 !important;
 }
 
-/* Checkbox Styling for Inside Book Cards */
+/* Checkbox Styling inside Book Cards */
 div[data-testid="stCheckbox"] {
     background: #111827 !important;
     border: 1.5px solid #243048 !important;
@@ -413,7 +375,8 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
 
             max_val = max(t_df["Value"]) if not t_df.empty else 5.0
             max_line = grp["Vegas Line"].max()
-            y_max = max(max_val * 1.3, max_line * 1.4, 3.0)
+            # Scaling ensures the numbers on top are comfortably above the white dotted line
+            y_max = max(max_val * 1.45, max_line * 1.55, 3.5)
 
             hit_bars = alt.Chart(t_df).mark_bar(size=18, cornerRadius=3, strokeWidth=0).encode(
                 x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=0, labelFontWeight="bold", labelColor="#94A3B8", labelFontSize=9.5)),
@@ -421,19 +384,21 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
-            # Numbers safely above baseline
-            text_fg = alt.Chart(t_df).mark_text(dy=-12, fontSize=10.5, fontWeight="bold", color="#FFFFFF").encode(
+            # dy=-10 forces numbers well above the bars and baseline
+            text_fg = alt.Chart(t_df).mark_text(dy=-10, fontSize=10.5, fontWeight="bold", color="#FFFFFF").encode(
                 x=alt.X("Date:N", sort=date_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f")
             )
 
-            # Prominent baseline rule representing the Vegas line
-            ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(color="#00E676", strokeWidth=2.0, strokeDash=[4, 4]).encode(y="y:Q")
+            # DOTTED LINE KEPT PURE WHITE (#FFFFFF)
+            ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(
+                color="#FFFFFF", strokeWidth=1.8, strokeDash=[4, 4]
+            ).encode(y="y:Q")
 
-            # Solid baseline underneath the chart bars
+            # CRISP SOLID BASELINE AT THE VERY BOTTOM OF THE CHART
             base_axis = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color="#FFFFFF", strokeWidth=2.5).encode(y="y:Q")
 
             compact_chart = (base_axis + hit_bars + ref_line + text_fg).properties(
-                height=130, width=310
+                height=130, width=320
             ).configure(background="transparent").configure_view(strokeWidth=0)
 
             return compact_chart
@@ -592,16 +557,16 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         grouped_props = p_props.groupby("Prop Name")
         prop_names_list = list(grouped_props.groups.keys())
 
-        if len(prop_names_list) > 1:
-            prop_tabs = st.tabs([f"{pn}" for pn in prop_names_list])
-            for t_idx, prop_name in enumerate(prop_names_list):
-                with prop_tabs[t_idx]:
-                    render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_name, grouped_props.get_group(prop_name))
-        else:
-            render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list[0], grouped_props.get_group(prop_names_list[0]))
+        # Track active prop selection for this player
+        state_key = f"active_prop_{player}"
+        if state_key not in st.session_state or st.session_state[state_key] not in prop_names_list:
+            st.session_state[state_key] = prop_names_list[0]
 
-# FULLY UNIFIED & CONDENSED MASTER BLOCK INSIDE THE EXACT CONTAINER DIV
-def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_name, p_group):
+        active_prop = st.session_state[state_key]
+        render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list, active_prop, grouped_props.get_group(active_prop))
+
+# FULLY UNIFIED & CONDENSED MASTER BLOCK WITH PROPS FULLY EMBEDDED INSIDE THE BOX
+def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list, active_prop, p_group):
     dk_row = p_group[p_group["Book"] == "DraftKings"]
     fd_row = p_group[p_group["Book"] == "FanDuel"]
 
@@ -629,24 +594,34 @@ def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop
     ev_val = primary_row['EV']
     win_prob = primary_row['Win Prob']
 
-    # 1. OPEN EXACT REQUESTED CONTAINER DIV
+    # 1. OPEN EXACT CONTAINER BOX - EVERYTHING LIVES INSIDE THIS DIV
     st.markdown(
         f'<div style="background: rgb(12, 17, 28); border: 1.5px solid rgb(30, 40, 61); border-radius: 16px; padding: 18px 22px; margin-top: 8px; margin-bottom: 16px; box-shadow: rgba(0, 0, 0, 0.4) 0px 6px 16px;">',
         unsafe_allow_html=True
     )
 
-    # 2. TOP HEADER ROW (LEFT: PROP TABS/NAME | MIDDLE: CHART WITH BASELINE | RIGHT: POSITION ON TOP, NAME BELOW)
+    # 2. TOP HEADER ROW (LEFT: PROPS INSIDE | MIDDLE: CHART WITH BASELINE | RIGHT: POSITION ON TOP, NAME BELOW)
     col_prop, col_chart, col_player = st.columns([1.1, 2.0, 1.1])
     
     with col_prop:
-        st.markdown(f'<div style="font-size:1.35rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px; margin-top:16px;">{prop_name}</div>', unsafe_allow_html=True)
+        # PROPS ARE COMPLETELY INSIDE THE BUBBLE VIA INTERNAL BUTTON PILLS
+        for pn in prop_names_list:
+            is_active = (pn == active_prop)
+            btn_border = "2px solid #00E676" if is_active else "1.5px solid #2B3A52"
+            btn_color = "#00E676" if is_active else "#FFFFFF"
+            btn_bg = "#1F2E45" if is_active else "#151D2A"
+            
+            if st.button(pn, key=f"btn_{player}_{pn}"):
+                st.session_state[f"active_prop_{player}"] = pn
+                st.rerun()
 
     with col_chart:
-        chart_obj = render_prop_hit_rate_chart_compact(prop_name, p_group)
+        chart_obj = render_prop_hit_rate_chart_compact(active_prop, p_group)
         if chart_obj:
             st.altair_chart(chart_obj, use_container_width=True)
 
     with col_player:
+        # RIGHT SIDE: POSITION ON TOP, PLAYER NAME BELOW, HEADSHOT ON THE FAR RIGHT
         st.markdown(
             f'<div style="display:flex; align-items:center; justify-content:flex-end; gap:12px; margin-top:4px;">'
             f'<div style="text-align:right;">'
@@ -665,7 +640,7 @@ def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop
         f'<div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 55px; gap:12px; align-items:center; margin-bottom:14px;">'
         f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">L5 AVG</div><div style="font-size:17px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_display}</div></div>'
         f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">LINE</div><div style="font-size:17px; font-weight:900; color:#FFFFFF;">{line_display}</div></div>'
-        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">PROP</div><div style="font-size:14px; font-weight:900; color:#FFFFFF;">{prop_name}</div></div>'
+        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">PROP</div><div style="font-size:14px; font-weight:900; color:#FFFFFF;">{active_prop}</div></div>'
         f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">HIT RATE</div><div style="font-size:17px; font-weight:900; color:{hit_rate_color};">▲ {hit_rate_display}</div></div>'
         f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">PROJECTION</div><div style="font-size:17px; font-weight:900; color:#00E676;">{proj_display}</div></div>'
         f'<div style="text-align:center;"><div style="width:38px; height:38px; border-radius:50%; border:2.5px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:16px; background:#161E2E; box-shadow:0 0 10px rgba(0,230,118,0.3);">{grade_char}</div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; margin-top:3px;">Matchup</div></div>'

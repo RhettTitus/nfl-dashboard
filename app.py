@@ -411,9 +411,9 @@ def render_prop_hit_rate_chart_inline(base_prop_name, grp):
 
             max_val = max(t_df["Value"]) if not t_df.empty else 5.0
             max_line = grp["Vegas Line"].max()
-            y_max = max(max_val * 1.35, max_line * 1.45, 3.0)
+            y_max = max(max_val * 1.25, max_line * 1.35, 3.0)
 
-            hit_bars = alt.Chart(t_df).mark_bar(size=22, cornerRadius=3, strokeWidth=0).encode(
+            hit_bars = alt.Chart(t_df).mark_bar(size=26, cornerRadius=4, strokeWidth=0).encode(
                 x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=0, labelFontWeight="bold", labelColor="#94A3B8", labelFontSize=10)),
                 y=alt.Y("Value:Q", title=None, scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(labels=False, ticks=False, grid=False)),
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
@@ -425,9 +425,8 @@ def render_prop_hit_rate_chart_inline(base_prop_name, grp):
 
             ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(color="#FFFFFF", strokeWidth=1.5, strokeDash=[3, 3]).encode(y="y:Q")
 
-            # Increased height from 75 to 115 to fill the block vertically
             inline_chart = (hit_bars + ref_line + text_fg).properties(
-                height=115, width=320
+                height=150, width=340
             ).configure(background="transparent").configure_view(strokeWidth=0)
 
             return inline_chart
@@ -595,7 +594,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         else:
             render_props_cash_tab_content(player, team_tag, player_depth_label, headshot_url, len(p_props), prop_names_list[0], grouped_props.get_group(prop_names_list[0]))
 
-# FULLY UNIFIED MASTER BLOCK (PLAYER HEADER + INLINE CHART + 6-PACK + SPACED PILLS)
+# FULLY UNIFIED MASTER BLOCK (FLEXBOX SINGLE-CONTAINER BLOCK)
 def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot_url, total_props_count, prop_name, p_group):
     dk_row = p_group[p_group["Book"] == "DraftKings"]
     fd_row = p_group[p_group["Book"] == "FanDuel"]
@@ -624,58 +623,61 @@ def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot
     ev_val = primary_row['EV']
     win_prob = primary_row['Win Prob']
 
-    card_container = st.container()
-    with card_container:
-        st.markdown(
-            f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-radius:18px; padding:22px; margin-top:10px; margin-bottom:18px; box-shadow:0 8px 20px rgba(0,0,0,0.5);">',
-            unsafe_allow_html=True
-        )
-        
-        col_info, col_chart, col_headshot = st.columns([1.2, 1.8, 0.8])
-        
-        with col_info:
-            st.markdown(f'<div style="font-size:1.60rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div style="font-size:1.0rem; color:#94A3B8; font-weight:700; margin-top:2px;">{team_tag} • {player_depth_label}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div style="margin-top:8px;"><span style="background-color:#172033; border:1px solid #2F3E5C; color:#00E676; font-weight:800; font-size:12px; padding:4px 14px; border-radius:14px; display:inline-block;">🏈 Props: <b>{total_props_count}</b></span></div>', unsafe_allow_html=True)
-        
-        with col_chart:
-            chart_obj = render_prop_hit_rate_chart_inline(prop_name, p_group)
-            if chart_obj:
-                st.altair_chart(chart_obj, use_container_width=True)
-            else:
-                st.markdown('<div style="color:#94A3B8; font-size:12px; text-align:center; padding-top:20px;">No Trend Data</div>', unsafe_allow_html=True)
+    # 1. OPEN MASTER CONTAINER
+    st.markdown(
+        f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-radius:18px; padding:22px; margin-top:10px; margin-bottom:18px; box-shadow:0 8px 20px rgba(0,0,0,0.5);">',
+        unsafe_allow_html=True
+    )
 
-        with col_headshot:
-            st.markdown(f'<div style="text-align:right;"><img src="{headshot_url}" style="width:85px; height:85px; border-radius:50%; object-fit:cover; border:3px solid #00E676; background:#1C2436; box-shadow:0 0 16px rgba(0,230,118,0.25);"></div>', unsafe_allow_html=True)
+    # 2. TOP HEADER ROW (PLAYER INFO & HEADSHOT) USING PURE FLEXBOX
+    top_header_html = (
+        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">'
+        f'<div>'
+        f'<div style="font-size:1.60rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>'
+        f'<div style="font-size:1.0rem; color:#94A3B8; font-weight:700; margin-top:2px;">{team_tag} • {player_depth_label}</div>'
+        f'<div style="margin-top:8px;"><span style="background-color:#172033; border:1px solid #2F3E5C; color:#00E676; font-weight:800; font-size:12px; padding:4px 14px; border-radius:14px; display:inline-block;">🏈 Props: <b>{total_props_count}</b></span></div>'
+        f'</div>'
+        f'<div><img src="{headshot_url}" style="width:85px; height:85px; border-radius:50%; object-fit:cover; border:3px solid #00E676; background:#1C2436; box-shadow:0 0 16px rgba(0,230,118,0.25);"></div>'
+        f'</div>'
+    )
+    st.markdown(top_header_html, unsafe_allow_html=True)
 
-        st.markdown('<div style="height:1px; background:#1E283D; margin:16px 0;"></div>', unsafe_allow_html=True)
-        
-        metrics_html = (
-            f'<div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 65px; gap:16px; align-items:center; margin-bottom:18px;">'
-            f'<div><div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.6px; margin-bottom:4px;">L5 AVG</div><div style="font-size:19px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_display}</div></div>'
-            f'<div><div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.6px; margin-bottom:4px;">LINE</div><div style="font-size:19px; font-weight:900; color:#FFFFFF;">{line_display}</div></div>'
-            f'<div><div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.6px; margin-bottom:4px;">PROP</div><div style="font-size:15px; font-weight:900; color:#FFFFFF;">{prop_name}</div></div>'
-            f'<div><div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.6px; margin-bottom:4px;">HIT RATE</div><div style="font-size:19px; font-weight:900; color:{hit_rate_color};">▲ {hit_rate_display}</div></div>'
-            f'<div><div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.6px; margin-bottom:4px;">PROJECTION</div><div style="font-size:19px; font-weight:900; color:#00E676;">{proj_display}</div></div>'
-            f'<div style="text-align:center;"><div style="width:42px; height:42px; border-radius:50%; border:3px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:18px; background:#161E2E; box-shadow:0 0 12px rgba(0,230,118,0.35);">{grade_char}</div><div style="font-size:10px; color:#94A3B8; font-weight:800; margin-top:4px;">Matchup</div></div>'
-            f'</div>'
-            f'<div style="height:1px; background:#1E283D; margin-bottom:18px;"></div>'
-        )
-        st.markdown(metrics_html, unsafe_allow_html=True)
-        
-        pills_html = (
-            f'<div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center;">'
-            f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:800;">L5: <b style="color:{hit_rate_color};">{hit_rate_display}</b></span>'
-            f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:800;">H2H: <b style="color:#00E676;">60%</b></span>'
-            f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:800;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>'
-            f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:800;">Edge: <b style="color:#00E676;">{ev_val}</b></span>'
-            f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:900;">DvP: 28th</span>'
-            f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:900;">Def Rank: 30th</span>'
-            f'</div>'
-            f'</div>'
-        )
-        st.markdown(pills_html, unsafe_allow_html=True)
+    # 3. RENDER TALLER CHART IN THE MIDDLE
+    chart_obj = render_prop_hit_rate_chart_inline(prop_name, p_group)
+    if chart_obj:
+        st.altair_chart(chart_obj, use_container_width=True)
 
+    st.markdown('<div style="height:1px; background:#1E283D; margin:16px 0;"></div>', unsafe_allow_html=True)
+
+    # 4. TOP 6-PACK METRICS ROW
+    metrics_html = (
+        f'<div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 65px; gap:16px; align-items:center; margin-bottom:18px;">'
+        f'<div><div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.6px; margin-bottom:4px;">L5 AVG</div><div style="font-size:19px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_display}</div></div>'
+        f'<div><div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.6px; margin-bottom:4px;">LINE</div><div style="font-size:19px; font-weight:900; color:#FFFFFF;">{line_display}</div></div>'
+        f'<div><div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.6px; margin-bottom:4px;">PROP</div><div style="font-size:15px; font-weight:900; color:#FFFFFF;">{prop_name}</div></div>'
+        f'<div><div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.6px; margin-bottom:4px;">HIT RATE</div><div style="font-size:19px; font-weight:900; color:{hit_rate_color};">▲ {hit_rate_display}</div></div>'
+        f'<div><div style="font-size:11.5px; color:#94A3B8; font-weight:800; letter-spacing:0.6px; margin-bottom:4px;">PROJECTION</div><div style="font-size:19px; font-weight:900; color:#00E676;">{proj_display}</div></div>'
+        f'<div style="text-align:center;"><div style="width:42px; height:42px; border-radius:50%; border:3px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:18px; background:#161E2E; box-shadow:0 0 12px rgba(0,230,118,0.35);">{grade_char}</div><div style="font-size:10px; color:#94A3B8; font-weight:800; margin-top:4px;">Matchup</div></div>'
+        f'</div>'
+        f'<div style="height:1px; background:#1E283D; margin-bottom:18px;"></div>'
+    )
+    st.markdown(metrics_html, unsafe_allow_html=True)
+
+    # 5. BOTTOM SPACED-OUT PILLS & CLOSE CONTAINER DIV
+    pills_html = (
+        f'<div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center;">'
+        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:800;">L5: <b style="color:{hit_rate_color};">{hit_rate_display}</b></span>'
+        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:800;">H2H: <b style="color:#00E676;">60%</b></span>'
+        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:800;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>'
+        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:800;">Edge: <b style="color:#00E676;">{ev_val}</b></span>'
+        f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:900;">DvP: 28th</span>'
+        f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:900;">Def Rank: 30th</span>'
+        f'</div>'
+        f'</div>'
+    )
+    st.markdown(pills_html, unsafe_allow_html=True)
+
+    # 6. DRAFTKINGS VS FANDUEL COMPARISON CARDS BELOW
     col_dk, col_fd = st.columns(2)
     with col_dk:
         if not dk_row.empty:

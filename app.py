@@ -421,12 +421,10 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
                 color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
             )
 
-            # Numbers safely above baseline
             text_fg = alt.Chart(t_df).mark_text(dy=-12, fontSize=10.5, fontWeight="bold", color="#FFFFFF").encode(
                 x=alt.X("Date:N", sort=date_labels), y=alt.Y("Value:Q"), text=alt.Text("Value:Q", format=".1f")
             )
 
-            # Prominent baseline rule
             ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(color="#00E676", strokeWidth=2.0, strokeDash=[4, 4]).encode(y="y:Q")
 
             compact_chart = (hit_bars + ref_line + text_fg).properties(
@@ -598,7 +596,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         else:
             render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list[0], grouped_props.get_group(prop_names_list[0]))
 
-# FULLY UNIFIED & CONDENSED MASTER BLOCK WITH LEFT-ALIGNED CHART & RIGHT POSITION/NAME
+# FULLY UNIFIED & CONDENSED MASTER BLOCK WITH YOUR EXACT REQUESTED CONTAINER DIV
 def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_name, p_group):
     dk_row = p_group[p_group["Book"] == "DraftKings"]
     fd_row = p_group[p_group["Book"] == "FanDuel"]
@@ -627,13 +625,13 @@ def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop
     ev_val = primary_row['EV']
     win_prob = primary_row['Win Prob']
 
-    # 1. OPEN CONDENSED MASTER CONTAINER (Strictly starts with player card block)
+    # 1. OPEN EXACT REQUESTED CONTAINER DIV (ALL WIDGET CONTENTS LIVES INSIDE THIS)
     st.markdown(
         f'<div style="background: rgb(12, 17, 28); border: 1.5px solid rgb(30, 40, 61); border-radius: 16px; padding: 18px 22px; margin-top: 8px; margin-bottom: 16px; box-shadow: rgba(0, 0, 0, 0.4) 0px 6px 16px;">',
         unsafe_allow_html=True
     )
 
-    # 2. TOP HEADER ROW (LEFT: PROP NAME | MIDDLE: SHIFTED CHART | RIGHT: POSITION FIRST THEN NAME)
+    # 2. TOP HEADER ROW (LEFT: PROP NAME | MIDDLE: CHART | RIGHT: POSITION FIRST, THEN NAME)
     col_prop, col_chart, col_player = st.columns([1.0, 2.1, 1.2])
     
     with col_prop:

@@ -8,7 +8,7 @@ import altair as alt
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# PROPS.CASH HIGH-CONTRAST CSS THEME
+# SINGLE MASTER CARD STYLING (ZERO EXTRA BUBBLES)
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -16,6 +16,23 @@ html, body, [class*="css"], .stApp {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     background-color: #07090E !important;
     color: #F8FAFC !important;
+}
+
+/* KILLS ANY RESIDUAL TABS OR EXPANDER DOM ARTIFACTS */
+div[data-testid="stExpander"],
+details[data-testid="stExpander"],
+div[data-baseweb="tab-list"],
+div[data-testid="stTabs"] {
+    display: none !important;
+}
+
+/* STYLES THE ONLY MASTER CARD CONTAINER */
+div[data-testid="stVerticalBlockBorderWrapper"] > div {
+    background-color: rgb(12, 17, 28) !important;
+    border: 1.5px solid rgb(30, 40, 61) !important;
+    border-radius: 16px !important;
+    padding: 16px 20px !important;
+    box-shadow: rgba(0, 0, 0, 0.4) 0px 6px 16px !important;
 }
 
 /* Crisp Headings */
@@ -40,22 +57,22 @@ div[data-baseweb="popover"] {
     background-color: #121824 !important;
 }
 
-/* Clean Prop Buttons inside the Top Bubble */
-div[data-testid="stHorizontalBlock"] button[kind="secondary"] {
+/* Sleek Prop Buttons */
+div[data-testid="stHorizontalBlock"] button {
     background-color: #151D2A !important;
     border: 1.5px solid #2B3A52 !important;
-    border-radius: 10px !important;
-    padding: 6px 14px !important;
+    border-radius: 8px !important;
+    padding: 4px 10px !important;
     color: #FFFFFF !important;
     font-weight: 800 !important;
-    font-size: 0.85rem !important;
+    font-size: 0.80rem !important;
 }
-div[data-testid="stHorizontalBlock"] button[kind="secondary"]:hover {
+div[data-testid="stHorizontalBlock"] button:hover {
     border-color: #00E676 !important;
     color: #00E676 !important;
 }
 
-/* Checkbox Styling inside Book Cards */
+/* Checkbox Styling */
 div[data-testid="stCheckbox"] {
     background: #111827 !important;
     border: 1.5px solid #243048 !important;
@@ -390,7 +407,6 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
 
             max_val = max(t_df["Value"]) if not t_df.empty else 5.0
             max_line = grp["Vegas Line"].max()
-            # Scaling forces all numbers safely above the white dotted line
             y_max = max(max_val * 1.5, max_line * 1.6, 4.0)
 
             hit_bars = alt.Chart(t_df).mark_bar(size=18, cornerRadius=3, strokeWidth=0).encode(
@@ -535,7 +551,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         grouped_props = p_props.groupby("Prop Name")
         prop_names_list = list(grouped_props.groups.keys())
 
-        # Track active prop selection for this player
         state_key = f"prop_sel_{player}"
         if state_key not in st.session_state or st.session_state[state_key] not in prop_names_list:
             st.session_state[state_key] = prop_names_list[0]
@@ -543,7 +558,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         chosen_prop = st.session_state[state_key]
         render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list, chosen_prop, grouped_props.get_group(chosen_prop))
 
-# TOP BUBBLE WIDGET WITH PROPS INSIDE & POSITION ON TOP OF PLAYER NAME
+# ONE UNIFIED BORDERED CONTAINER (NO EXTRA OR PHANTOM BOXES)
 def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list, active_prop, p_group):
     dk_row = p_group[p_group["Book"] == "DraftKings"]
     fd_row = p_group[p_group["Book"] == "FanDuel"]
@@ -572,76 +587,64 @@ def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop
     ev_val = primary_row['EV']
     win_prob = primary_row['Win Prob']
 
-    # 1. TOP BUBBLE HOUSING PROPS (LEFT) AND POSITION/NAME (RIGHT)
-    st.markdown(
-        f'<div style="background: rgb(12, 17, 28); border: 1.5px solid rgb(30, 40, 61); border-radius: 16px; padding: 12px 18px; margin-bottom: 10px; box-shadow: rgba(0, 0, 0, 0.4) 0px 6px 16px;">',
-        unsafe_allow_html=True
-    )
-    col_bubble_left, col_bubble_right = st.columns([1.5, 1.5])
-    
-    with col_bubble_left:
-        # PROPS LISTED HORIZONTALLY ON THE LEFT INSIDE THE BUBBLE
-        sub_cols = st.columns(len(prop_names_list))
-        for idx, pn in enumerate(prop_names_list):
-            with sub_cols[idx]:
-                if st.button(pn, key=f"btn_{player}_{pn}"):
-                    st.session_state[f"prop_sel_{player}"] = pn
-                    st.rerun()
+    # ONLY ONE MASTER BORDERED CONTAINER
+    with st.container(border=True):
+        col_prop, col_chart, col_player = st.columns([1.1, 2.0, 1.1])
+        
+        with col_prop:
+            st.caption("SELECT PROP:")
+            btn_cols = st.columns(len(prop_names_list))
+            for idx, pn in enumerate(prop_names_list):
+                with btn_cols[idx]:
+                    if st.button(pn, key=f"btn_{player}_{pn}"):
+                        st.session_state[f"prop_sel_{player}"] = pn
+                        st.rerun()
 
-    with col_bubble_right:
-        # RIGHT HAND SIDE: POSITION ON TOP, PLAYER NAME BELOW, HEADSHOT ON THE FAR RIGHT
-        st.markdown(
-            f'<div style="display:flex; align-items:center; justify-content:flex-end; gap:12px;">'
-            f'<div style="text-align:right;">'
-            f'<div style="font-size:0.92rem; color:#00E676; font-weight:800; letter-spacing:0.3px; margin-bottom:1px;">{player_depth_label}</div>'
-            f'<div style="font-size:1.30rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>'
+        with col_chart:
+            chart_obj = render_prop_hit_rate_chart_compact(active_prop, p_group)
+            if chart_obj:
+                st.altair_chart(chart_obj, use_container_width=True)
+
+        with col_player:
+            st.markdown(
+                f'<div style="display:flex; align-items:center; justify-content:flex-end; gap:12px; margin-top:8px;">'
+                f'<div style="text-align:right;">'
+                f'<div style="font-size:0.92rem; color:#00E676; font-weight:800; letter-spacing:0.3px; margin-bottom:2px;">{player_depth_label}</div>'
+                f'<div style="font-size:1.35rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>'
+                f'</div>'
+                f'<img src="{headshot_url}" style="width:70px; height:70px; border-radius:50%; object-fit:cover; border:2.5px solid #00E676; background:#1C2436; box-shadow:0 0 12px rgba(0,230,118,0.25);">'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+
+        st.markdown('<div style="height:1px; background:#1E283D; margin:14px 0;"></div>', unsafe_allow_html=True)
+
+        # 3. TOP 6-PACK METRICS ROW
+        metrics_html = (
+            f'<div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 55px; gap:12px; align-items:center; margin-bottom:14px;">'
+            f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">L5 AVG</div><div style="font-size:17px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_display}</div></div>'
+            f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">LINE</div><div style="font-size:17px; font-weight:900; color:#FFFFFF;">{line_display}</div></div>'
+            f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">PROP</div><div style="font-size:14px; font-weight:900; color:#FFFFFF;">{active_prop}</div></div>'
+            f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">HIT RATE</div><div style="font-size:17px; font-weight:900; color:{hit_rate_color};">▲ {hit_rate_display}</div></div>'
+            f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">PROJECTION</div><div style="font-size:17px; font-weight:900; color:#00E676;">{proj_display}</div></div>'
+            f'<div style="text-align:center;"><div style="width:38px; height:38px; border-radius:50%; border:2.5px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:16px; background:#161E2E; box-shadow:0 0 10px rgba(0,230,118,0.3);">{grade_char}</div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; margin-top:3px;">Matchup</div></div>'
             f'</div>'
-            f'<img src="{headshot_url}" style="width:58px; height:58px; border-radius:50%; object-fit:cover; border:2.5px solid #00E676; background:#1C2436; box-shadow:0 0 10px rgba(0,230,118,0.25);">'
-            f'</div>',
-            unsafe_allow_html=True
+            f'<div style="height:1px; background:#1E283D; margin-bottom:18px;"></div>'
         )
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(metrics_html, unsafe_allow_html=True)
 
-    # 2. MAIN CARD: CHART, METRICS & PILLS
-    st.markdown(
-        f'<div style="background: rgb(12, 17, 28); border: 1.5px solid rgb(30, 40, 61); border-radius: 16px; padding: 18px 22px; margin-bottom: 16px; box-shadow: rgba(0, 0, 0, 0.4) 0px 6px 16px;">',
-        unsafe_allow_html=True
-    )
-
-    # HIT RATE CHART IN THE MIDDLE
-    chart_obj = render_prop_hit_rate_chart_compact(active_prop, p_group)
-    if chart_obj:
-        st.altair_chart(chart_obj, use_container_width=True)
-
-    st.markdown('<div style="height:1px; background:#1E283D; margin:14px 0;"></div>', unsafe_allow_html=True)
-
-    # 3. TOP 6-PACK METRICS ROW
-    metrics_html = (
-        f'<div style="display:grid; grid-template-columns: 1fr 1fr 1.2fr 1fr 1fr 55px; gap:12px; align-items:center; margin-bottom:14px;">'
-        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">L5 AVG</div><div style="font-size:17px; font-weight:900; color:#FFFFFF;">▲ {l5_avg_display}</div></div>'
-        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">LINE</div><div style="font-size:17px; font-weight:900; color:#FFFFFF;">{line_display}</div></div>'
-        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">PROP</div><div style="font-size:14px; font-weight:900; color:#FFFFFF;">{active_prop}</div></div>'
-        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">HIT RATE</div><div style="font-size:17px; font-weight:900; color:{hit_rate_color};">▲ {hit_rate_display}</div></div>'
-        f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">PROJECTION</div><div style="font-size:17px; font-weight:900; color:#00E676;">{proj_display}</div></div>'
-        f'<div style="text-align:center;"><div style="width:38px; height:38px; border-radius:50%; border:2.5px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:16px; background:#161E2E; box-shadow:0 0 10px rgba(0,230,118,0.3);">{grade_char}</div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; margin-top:3px;">Matchup</div></div>'
-        f'</div>'
-        f'<div style="height:1px; background:#1E283D; margin-bottom:18px;"></div>'
-    )
-    st.markdown(metrics_html, unsafe_allow_html=True)
-
-    # 4. BOTTOM METRICS PILLS (STRETCHED EVENLY ACROSS THE SCREEN WIDTH)
-    pills_html = (
-        f'<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; margin-bottom:6px; gap:8px;">'
-        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 14px; border-radius:16px; font-size:13px; font-weight:800; flex:1; text-align:center;">L5: <b style="color:{hit_rate_color};">{hit_rate_display}</b></span>'
-        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 14px; border-radius:16px; font-size:13px; font-weight:800; flex:1; text-align:center;">H2H: <b style="color:#00E676;">60%</b></span>'
-        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 14px; border-radius:16px; font-size:13px; font-weight:800; flex:1; text-align:center;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>'
-        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 14px; border-radius:16px; font-size:13px; font-weight:800; flex:1; text-align:center;">Edge: <b style="color:#00E676;">{ev_val}</b></span>'
-        f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:8px 14px; border-radius:16px; font-size:13px; font-weight:900; flex:1; text-align:center;">DvP: 28th</span>'
-        f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:8px 14px; border-radius:16px; font-size:13px; font-weight:900; flex:1; text-align:center;">Def Rank: 30th</span>'
-        f'</div>'
-        f'</div>'
-    )
-    st.markdown(pills_html, unsafe_allow_html=True)
+        # 4. BOTTOM METRICS PILLS (STRETCHED EVENLY ACROSS THE SCREEN WIDTH)
+        pills_html = (
+            f'<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; margin-bottom:6px; gap:8px;">'
+            f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 14px; border-radius:16px; font-size:13px; font-weight:800; flex:1; text-align:center;">L5: <b style="color:{hit_rate_color};">{hit_rate_display}</b></span>'
+            f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 14px; border-radius:16px; font-size:13px; font-weight:800; flex:1; text-align:center;">H2H: <b style="color:#00E676;">60%</b></span>'
+            f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 14px; border-radius:16px; font-size:13px; font-weight:800; flex:1; text-align:center;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>'
+            f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 14px; border-radius:16px; font-size:13px; font-weight:800; flex:1; text-align:center;">Edge: <b style="color:#00E676;">{ev_val}</b></span>'
+            f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:8px 14px; border-radius:16px; font-size:13px; font-weight:900; flex:1; text-align:center;">DvP: 28th</span>'
+            f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:8px 14px; border-radius:16px; font-size:13px; font-weight:900; flex:1; text-align:center;">Def Rank: 30th</span>'
+            f'</div>'
+        )
+        st.markdown(pills_html, unsafe_allow_html=True)
 
     # 5. DRAFTKINGS VS FANDUEL COMPARISON CARDS
     col_dk, col_fd = st.columns(2)

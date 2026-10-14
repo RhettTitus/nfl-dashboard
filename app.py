@@ -80,22 +80,22 @@ div[data-baseweb="popover"] {
 
 /* Checkbox Touch Target */
 div[data-testid="stCheckbox"] {
-    background: #121824 !important;
-    border: 1.5px solid #23304A !important;
+    background: #151D2A !important;
+    border: 1.5px solid #2B3A52 !important;
     border-radius: 8px !important;
-    padding: 8px 12px !important;
-    margin-top: 6px !important;
+    padding: 6px 10px !important;
+    margin-top: 8px !important;
 }
 div[data-testid="stCheckbox"] label span:first-child {
-    width: 22px !important;
-    height: 22px !important;
+    width: 20px !important;
+    height: 20px !important;
     margin-right: 8px !important;
 }
 div[data-testid="stCheckbox"] label p {
-    font-size: 0.98rem !important;
+    font-size: 0.92rem !important;
     font-weight: 800 !important;
     letter-spacing: 0.3px !important;
-    color: #F8FAFC !important;
+    color: #00E676 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -356,7 +356,7 @@ def render_compact_book_box(r, chk_key):
     prob_delta_str = f"({r['Prob Delta']})" if r['Prob Delta'] else ""
 
     card_html = (
-        f'<div style="background:#111827; border:1.5px solid #243048; border-radius:10px; padding:12px 14px; margin-bottom:4px;">'
+        f'<div style="background:#111827; border:1.5px solid #243048; border-radius:12px; padding:12px 14px; margin-bottom:4px;">'
         f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">'
         f'<div style="display:flex; align-items:center;">{book_html} {star_badge}</div>'
         f'<span style="font-size:11px; font-weight:700; color:#FFFFFF; background:#1E293B; padding:3px 9px; border-radius:4px; letter-spacing:0.3px;">{action_text}</span>'
@@ -426,7 +426,7 @@ def render_prop_hit_rate_chart_compact(base_prop_name, grp):
             ref_line = alt.Chart(pd.DataFrame({"y": [primary_line]})).mark_rule(color="#FFFFFF", strokeWidth=1.2, strokeDash=[3, 3]).encode(y="y:Q")
 
             compact_chart = (hit_bars + ref_line + text_fg).properties(
-                height=90, width=240
+                height=110, width=180
             ).configure(background="transparent").configure_view(strokeWidth=0)
 
             return compact_chart
@@ -630,7 +630,7 @@ def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot
     )
 
     # 2. TOP HEADER ROW (PLAYER INFO | SIDE-BY-SIDE COMPACT CHART | HEADSHOT)
-    col_info, col_chart, col_headshot = st.columns([1.3, 1.8, 0.7])
+    col_info, col_chart, col_headshot = st.columns([1.2, 1.6, 0.7])
     
     with col_info:
         st.markdown(f'<div style="font-size:1.45rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>', unsafe_allow_html=True)
@@ -657,25 +657,25 @@ def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot
         f'<div><div style="font-size:11px; color:#94A3B8; font-weight:800; letter-spacing:0.5px; margin-bottom:2px;">PROJECTION</div><div style="font-size:17px; font-weight:900; color:#00E676;">{proj_display}</div></div>'
         f'<div style="text-align:center;"><div style="width:38px; height:38px; border-radius:50%; border:2.5px solid #00E676; display:flex; align-items:center; justify-content:center; margin:0 auto; font-weight:900; color:#00E676; font-size:16px; background:#161E2E; box-shadow:0 0 10px rgba(0,230,118,0.3);">{grade_char}</div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; margin-top:3px;">Matchup</div></div>'
         f'</div>'
-        f'<div style="height:1px; background:#1E283D; margin-bottom:14px;"></div>'
+        f'<div style="height:1px; background:#1E283D; margin-bottom:18px;"></div>'
     )
     st.markdown(metrics_html, unsafe_allow_html=True)
 
-    # 4. BOTTOM SPACED-OUT PILLS & CLOSE CONTAINER DIV
+    # 4. BOTTOM SPACED-OUT PILLS (Spaced out & given healthy bottom margin inside the card)
     pills_html = (
-        f'<div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center;">'
-        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:7px 16px; border-radius:16px; font-size:13px; font-weight:800;">L5: <b style="color:{hit_rate_color};">{hit_rate_display}</b></span>'
-        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:7px 16px; border-radius:16px; font-size:13px; font-weight:800;">H2H: <b style="color:#00E676;">60%</b></span>'
-        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:7px 16px; border-radius:16px; font-size:13px; font-weight:800;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>'
-        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:7px 16px; border-radius:16px; font-size:13px; font-weight:800;">Edge: <b style="color:#00E676;">{ev_val}</b></span>'
-        f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:7px 16px; border-radius:16px; font-size:13px; font-weight:900;">DvP: 28th</span>'
-        f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:7px 16px; border-radius:16px; font-size:13px; font-weight:900;">Def Rank: 30th</span>'
+        f'<div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">'
+        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:800;">L5: <b style="color:{hit_rate_color};">{hit_rate_display}</b></span>'
+        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:800;">H2H: <b style="color:#00E676;">60%</b></span>'
+        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:800;">Model Win: <b style="color:#00E676;">{win_prob}</b></span>'
+        f'<span style="background:#131B2B; color:#FFFFFF; border:1px solid #2B3A54; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:800;">Edge: <b style="color:#00E676;">{ev_val}</b></span>'
+        f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:900;">DvP: 28th</span>'
+        f'<span style="background:#131B2B; color:#00E676; border:1.5px solid #00E676; padding:8px 18px; border-radius:18px; font-size:13.5px; font-weight:900;">Def Rank: 30th</span>'
         f'</div>'
         f'</div>'
     )
     st.markdown(pills_html, unsafe_allow_html=True)
 
-    # 5. DRAFTKINGS VS FANDUEL COMPARISON CARDS BELOW
+    # 5. DRAFTKINGS VS FANDUEL COMPARISON CARDS BELOW (WITH CHECKBOX INSIDE)
     col_dk, col_fd = st.columns(2)
     with col_dk:
         if not dk_row.empty:

@@ -8,7 +8,7 @@ import altair as alt
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# HIGH-CONTRAST CSS THEME (KILLS EXTRA BUBBLES & ENFORCES SLEEK CARD)
+# HIGH-CONTRAST CSS THEME
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -57,8 +57,8 @@ div[data-baseweb="popover"] {
     background-color: #121824 !important;
 }
 
-/* PRO BUTTONS: NEVER CHOPPED OFF, CLEAN NO-WRAP BUTTONS */
-div[data-testid="stHorizontalBlock"] button {
+/* PRO BUTTONS: INACTIVE BUTTONS */
+div[data-testid="stHorizontalBlock"] button[kind="secondary"] {
     background-color: #151D2A !important;
     border: 1.5px solid #2B3A52 !important;
     border-radius: 8px !important;
@@ -70,9 +70,20 @@ div[data-testid="stHorizontalBlock"] button {
     width: auto !important;
     margin-bottom: 4px !important;
 }
-div[data-testid="stHorizontalBlock"] button:hover {
-    border-color: #00E676 !important;
-    color: #00E676 !important;
+
+/* PRO BUTTONS: ACTIVE SELECTED BUTTON LIGHTS UP RED */
+div[data-testid="stHorizontalBlock"] button[kind="primary"] {
+    background-color: #381518 !important;
+    border: 2px solid #FF3B30 !important;
+    border-radius: 8px !important;
+    padding: 4px 12px !important;
+    color: #FF3B30 !important;
+    font-weight: 900 !important;
+    font-size: 0.82rem !important;
+    white-space: nowrap !important;
+    width: auto !important;
+    box-shadow: 0 0 10px rgba(255, 59, 48, 0.45) !important;
+    margin-bottom: 4px !important;
 }
 
 /* Checkbox Styling */
@@ -367,6 +378,13 @@ def render_compact_book_box(r, chk_key):
     odds_str = f"({r['Odds']})" if r['Odds'] != "-" else ""
     prob_delta_str = f"({r['Prob Delta']})" if r['Prob Delta'] else ""
 
+    # Color code book probability: < 50% Green, >= 50% Red
+    b_prob_raw = r.get("_raw_book_prob", 0.5)
+    b_prob_color = "#00E676" if b_prob_raw < 0.50 else "#FF3B30"
+
+    # Fully descriptive prop text (e.g., Over 17.5 Recs (-113))
+    prop_label_str = r.get("Prop Name", "")
+
     card_html = (
         f'<div style="background:#111827; border:1.5px solid #243048; border-top-left-radius:12px; border-top-right-radius:12px; padding:12px 14px; border-bottom:none;">'
         f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">'
@@ -374,12 +392,12 @@ def render_compact_book_box(r, chk_key):
         f'<span style="font-size:11px; font-weight:700; color:#FFFFFF; background:#1E293B; padding:3px 9px; border-radius:4px; letter-spacing:0.3px;">{action_text}</span>'
         f'</div>'
         f'<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">'
-        f'<span style="font-size:1.20rem; font-weight:800; color:#FFFFFF; letter-spacing:0.4px;">{r["Pick"]} {format_clean_decimal(r["Vegas Line"])} <span style="font-size:0.9rem; font-weight:600; color:#94A3B8;">{odds_str}</span></span>'
+        f'<span style="font-size:1.15rem; font-weight:800; color:#FFFFFF; letter-spacing:0.4px;">{r["Pick"]} {format_clean_decimal(r["Vegas Line"])} {prop_label_str} <span style="font-size:0.9rem; font-weight:600; color:#94A3B8;">{odds_str}</span></span>'
         f'<span style="font-size:1.20rem; font-weight:800; color:#00E676; letter-spacing:0.3px;">{r["EV"]} EV</span>'
         f'</div>'
         f'<div style="display:flex; justify-content:space-between; font-size:0.85rem; font-weight:600; color:#94A3B8; letter-spacing:0.2px; margin-bottom:8px;">'
         f'<span>Model: <b style="color:#FFFFFF; font-weight:700;">{r["Win Prob"]}</b></span>'
-        f'<span>Book: <b style="color:#FFFFFF; font-weight:700;">{r["Book Win Prob"]}</b> <span style="color:#00E676; font-weight:800;">{prob_delta_str}</span></span>'
+        f'<span>Book: <b style="color:{b_prob_color}; font-weight:800;">{r["Book Win Prob"]}</b> <span style="color:#00E676; font-weight:800;">{prob_delta_str}</span></span>'
         f'</div>'
         f'<div style="display:flex; align-items:center; justify-content:space-between; background:{margin_bg}; border:1.5px solid {margin_border}; border-radius:6px; padding:4px 8px;">'
         f'<span style="font-size:11.5px; font-weight:700; color:{margin_color}; letter-spacing:0.3px;">Margin vs Line:</span>'
@@ -495,7 +513,10 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         p_name, line_f = extract_sanitized_prop_and_line(r)
         if not p_name or line_f is None: continue
 
-        proj = r.get("Projection")
+        # PRIORTIZE CALIBRATED PROJECTION SO MARGIN MATCHES ACTION LOGIC
+        proj = r.get("Calibrated Proj")
+        if pd.isna(proj) or str(proj).strip().lower() in ["nan", "none", "", "unposted"]:
+            proj = r.get("Projection")
         if pd.isna(proj) or str(proj).strip().lower() in ["nan", "none", "", "unposted"]: continue
 
         try:
@@ -506,7 +527,9 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             book = str(r.get("Book", "DraftKings")).strip()
             grade_val = str(r.get("Grade", "A")).strip()
             game_str = str(r.get("Game", "")).strip()
-            role_alert = str(r.get("Role Alert", "")).strip()
+            
+            raw_role = str(r.get("Role Alert", "")).strip()
+            role_alert = "" if raw_role.lower() in ["nan", "none", "", "null"] else raw_role
             
             side = str(r.get("Side", "Over")).strip()
             if not side or side.lower() in ["nan", "none"]: side = "Over"
@@ -533,6 +556,9 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 except:
                     pass
 
+            # MARGIN NOW ALIGNED TO CALIBRATED PROJECTION
+            margin_calc = round(proj_f - line_f, 1) if side == "Over" else round(line_f - proj_f, 1)
+
             prop_rows.append({
                 "Player": player_name,
                 "Team": team_name,
@@ -543,13 +569,14 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 "Vegas Line": line_f,
                 "Odds": format_american_odds(odds_val),
                 "Book Win Prob": book_prob_str,
+                "_raw_book_prob": calc_bp if calc_bp is not None else 0.5,
                 "Model Projection": proj_f,
                 "Grade": grade_val,
                 "Game": game_str,
                 "Role Alert": role_alert,
                 "Last 5": last_5,
                 "Pick": side,
-                "Margin": round(proj_f - line_f, 1),
+                "Margin": margin_calc,
                 "EV": format_percentage(ev, is_ev=True),
                 "Win Prob": format_percentage(model_prob),
                 "Prob Delta": prob_delta_str,
@@ -596,14 +623,12 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         chosen_prop = st.session_state[state_key]
         render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list, chosen_prop, grouped_props.get_group(chosen_prop))
 
-# STREAMLINED MASTER CARD (ZERO VERTICAL BLOAT)
+# STREAMLINED MASTER CARD
 def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop_names_list, active_prop, p_group):
     dk_row = p_group[p_group["Book"] == "DraftKings"]
     fd_row = p_group[p_group["Book"] == "FanDuel"]
 
     primary_row = dk_row.iloc[0] if not dk_row.empty else fd_row.iloc[0]
-    line_display = format_clean_decimal(primary_row["Vegas Line"])
-    proj_display = format_clean_decimal(primary_row["Model Projection"])
     grade_char = primary_row.get("Grade", "A")
 
     last_5_raw = str(primary_row.get("Last 5", "")).strip()
@@ -620,15 +645,14 @@ def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop
                 hit_rate_color = "#00E676" if pct >= 50 else "#FF3B30"
         except: pass
 
-    # Clean narrative context from Script 3
-    role_alert = primary_row.get("Role Alert", "")
+    # Clean narrative context from Script 3 (NO ⚡ nan)
+    role_alert = str(primary_row.get("Role Alert", "")).strip()
     game_script = primary_row.get("Game Script", "Standard")
     game_str = primary_row.get("Game", "")
     
-    role_badge = f'<div style="font-size:0.80rem; color:#F59E0B; font-weight:800; letter-spacing:0.3px; margin-bottom:2px;">⚡ {role_alert}</div>' if role_alert else ""
+    role_badge = f'<div style="font-size:0.80rem; color:#F59E0B; font-weight:800; letter-spacing:0.3px; margin-bottom:2px;">⚡ {role_alert}</div>' if role_alert and role_alert.lower() not in ["nan", "none"] else ""
     game_badge = f'<div style="font-size:0.82rem; color:#94A3B8; font-weight:700; margin-bottom:2px;">{game_str} • {game_script}</div>' if game_str else ""
 
-    # Grade Color
     grade_color = "#00E676" if grade_char in ['A', 'B'] else ("#F59E0B" if grade_char == 'C' else "#FF3B30")
 
     # ONLY ONE MASTER BORDERED CONTAINER
@@ -638,19 +662,9 @@ def render_props_cash_tab_content(player, player_depth_label, headshot_url, prop
         with col_prop:
             st.caption("SELECT PROP:")
             for pn in prop_names_list:
-                if pn == active_prop:
-                    st.markdown(
-                        f"""<style>
-                        div[data-testid="stHorizontalBlock"] button[key="btn_{player}_{pn}"] {{
-                            border: 2px solid #FF3B30 !important;
-                            color: #FF3B30 !important;
-                            background-color: #2D1517 !important;
-                            box-shadow: 0 0 10px rgba(255, 59, 48, 0.4) !important;
-                        }}
-                        </style>""",
-                        unsafe_allow_html=True
-                    )
-                if st.button(pn, key=f"btn_{player}_{pn}"):
+                # SELECTED PROP BUTTON LIGHTS UP RED USING PRIMARY TYPE
+                btn_type = "primary" if pn == active_prop else "secondary"
+                if st.button(pn, key=f"btn_{player}_{pn}", type=btn_type):
                     st.session_state[f"prop_sel_{player}"] = pn
                     st.rerun()
 
@@ -733,7 +747,9 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
             p_n, line_f = extract_sanitized_prop_and_line(r_cand)
             if not p_n or line_f is None: continue
             
-            proj = r_cand.get("Projection")
+            proj = r_cand.get("Calibrated Proj")
+            if pd.isna(proj) or str(proj).strip().lower() in ["nan", "none", "", "unposted"]:
+                proj = r_cand.get("Projection")
             if pd.isna(proj) or str(proj).strip().lower() in ["nan", "none", "", "unposted"]: continue
                 
             try:
@@ -835,9 +851,9 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 model_prob = format_percentage(row.get("_model_prob"))
                 ev_clean = format_percentage(row.get("EV"), is_ev=True)
 
-                proj_val = float(row.get('Projection', 0))
+                proj_val = float(row.get('Calibrated Proj', row.get('Projection', 0)))
                 line_f_val = float(row.get('Clean_Line', 0))
-                margin_val = round(proj_val - line_f_val, 1)
+                margin_val = round(proj_val - line_f_val, 1) if side_clean == "Over" else round(line_f_val - proj_val, 1)
                 is_pos = margin_val >= 0
                 m_color = "#00E676" if is_pos else "#FF3B30"
                 m_bg = "#00E67610" if is_pos else "#FF3B3010"
@@ -853,7 +869,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                         st.markdown(f"📌 {prop_n} [{book_s}]", unsafe_allow_html=True)
                         st.caption(f"Action: `{row.get('Action', 'STRONG BET')}`")
                     with c3:
-                        st.markdown(f"<div style='font-size:1.10rem; font-weight:800; color:#FFFFFF;'>{side_clean} {line_display} <span style='color:#94A3B8; font-weight:600;'>{odds_str}</span></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size:1.10rem; font-weight:800; color:#FFFFFF;'>{side_clean} {line_display} {prop_n} <span style='color:#94A3B8; font-weight:600;'>{odds_str}</span></div>", unsafe_allow_html=True)
                         st.markdown(f"<span style='font-size:12.5px; font-weight:800; color:{m_color}; background:{m_bg}; padding:3px 8px; border-radius:5px; border:1px solid {m_border};'>Margin: {margin_val:+0.1f}</span>", unsafe_allow_html=True)
                     with c4:
                         st.markdown(f"<div style='font-size:1.25rem; font-weight:800; color:#00E676;'>{ev_clean} EV</div>", unsafe_allow_html=True)

@@ -78,15 +78,24 @@ div[data-baseweb="popover"] {
     background-color: #121824 !important;
 }
 
-/* Checkbox Restyling to tuck inside the book box */
+/* FLUSH CHECKBOX STYLING TO INTEGRATE DIRECTLY INTO THE BOOK BOX */
 div[data-testid="stCheckbox"] {
-    background: transparent !important;
-    border: none !important;
-    padding: 0px !important;
-    margin-top: 4px !important;
+    background: #111827 !important;
+    border: 1.5px solid #243048 !important;
+    border-top: none !important;
+    border-bottom-left-radius: 12px !important;
+    border-bottom-right-radius: 12px !important;
+    padding: 8px 16px !important;
+    margin-top: -8px !important;
+    margin-bottom: 10px !important;
+}
+div[data-testid="stCheckbox"] label span:first-child {
+    width: 18px !important;
+    height: 18px !important;
+    margin-right: 8px !important;
 }
 div[data-testid="stCheckbox"] label p {
-    font-size: 0.82rem !important;
+    font-size: 0.88rem !important;
     font-weight: 800 !important;
     color: #00E676 !important;
 }
@@ -348,9 +357,8 @@ def render_compact_book_box(r, chk_key):
     odds_str = f"({r['Odds']})" if r['Odds'] != "-" else ""
     prob_delta_str = f"({r['Prob Delta']})" if r['Prob Delta'] else ""
 
-    # Open single cohesive sportsbook card including the checkbox neatly tucked at the bottom center
-    st.markdown(
-        f'<div style="background:#111827; border:1.5px solid #243048; border-radius:12px; padding:14px 16px; margin-bottom:6px;">'
+    card_html = (
+        f'<div style="background:#111827; border:1.5px solid #243048; border-top-left-radius:12px; border-top-right-radius:12px; padding:14px 16px; border-bottom:none;">'
         f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">'
         f'<div style="display:flex; align-items:center;">{book_html} {star_badge}</div>'
         f'<span style="font-size:11px; font-weight:700; color:#FFFFFF; background:#1E293B; padding:3px 9px; border-radius:4px; letter-spacing:0.3px;">{action_text}</span>'
@@ -363,14 +371,13 @@ def render_compact_book_box(r, chk_key):
         f'<span>Model: <b style="color:#FFFFFF; font-weight:700;">{r["Win Prob"]}</b></span>'
         f'<span>Book: <b style="color:#FFFFFF; font-weight:700;">{r["Book Win Prob"]}</b> <span style="color:#00E676; font-weight:800;">{prob_delta_str}</span></span>'
         f'</div>'
-        f'<div style="display:flex; align-items:center; justify-content:space-between; background:{margin_bg}; border:1.5px solid {margin_border}; border-radius:6px; padding:5px 10px; margin-bottom:8px;">'
+        f'<div style="display:flex; align-items:center; justify-content:space-between; background:{margin_bg}; border:1.5px solid {margin_border}; border-radius:6px; padding:5px 10px;">'
         f'<span style="font-size:11.5px; font-weight:700; color:{margin_color}; letter-spacing:0.3px;">Margin vs Line:</span>'
         f'<span style="font-size:12px; font-weight:800; color:{margin_color}; letter-spacing:0.4px;">{margin_arrow} {margin_val:+0.1f} (Proj: {format_clean_decimal(r["Model Projection"])})</span>'
         f'</div>'
-        f'</div>',
-        unsafe_allow_html=True
+        f'</div>'
     )
-    # Checkbox placed right inside the bottom of the card frame
+    st.markdown(card_html, unsafe_allow_html=True)
     st.checkbox("➕ Add to Slip", key=chk_key)
 
 def render_prop_hit_rate_chart_compact(base_prop_name, grp):
@@ -618,7 +625,7 @@ def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot
     ev_val = primary_row['EV']
     win_prob = primary_row['Win Prob']
 
-    # 1. OPEN CONDENSED MASTER CONTAINER (Clean, no empty top bars)
+    # 1. OPEN CONDENSED MASTER CONTAINER
     st.markdown(
         f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-radius:16px; padding:18px 22px; margin-top:8px; margin-bottom:16px; box-shadow:0 6px 16px rgba(0,0,0,0.4);">',
         unsafe_allow_html=True
@@ -670,7 +677,7 @@ def render_props_cash_tab_content(player, team_tag, player_depth_label, headshot
     )
     st.markdown(pills_html, unsafe_allow_html=True)
 
-    # 5. DRAFTKINGS VS FANDUEL COMPARISON CARDS BELOW (WITH CHECKBOX EMBEDDED INSIDE)
+    # 5. DRAFTKINGS VS FANDUEL COMPARISON CARDS (CHECKBOX FLUSH-MOUNTED INSIDE)
     col_dk, col_fd = st.columns(2)
     with col_dk:
         if not dk_row.empty:

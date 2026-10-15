@@ -19,9 +19,21 @@ html, body, [class*="css"], .stApp {
     color: #F8FAFC !important;
 }
 
-/* KILLS ANY RESIDUAL TABS OR EXPANDER DOM ARTIFACTS */
-div[data-testid="stExpander"],
-details[data-testid="stExpander"],
+/* STYLES THE GAMBLY EXPANDER TO LOOK SLEEK AND INTENTIONAL */
+div[data-testid="stExpander"] {
+    background-color: #0C111C !important;
+    border: 1.5px solid #1E283D !important;
+    border-radius: 14px !important;
+    margin-bottom: 16px !important;
+}
+div[data-testid="stExpander"] summary {
+    font-size: 1.05rem !important;
+    font-weight: 800 !important;
+    color: #FFFFFF !important;
+    padding: 10px 16px !important;
+}
+
+/* KILLS RESIDUAL TABS DOM ARTIFACTS ONLY (DO NOT HIDE EXPANDERS) */
 div[data-baseweb="tab-list"],
 div[data-testid="stTabs"] {
     display: none !important;
@@ -72,22 +84,22 @@ div[data-testid="stHorizontalBlock"] button[kind="secondary"] {
     margin-bottom: 4px !important;
 }
 
-/* PRO BUTTONS: ACTIVE SELECTED BUTTON LIGHTS UP CYAN */
+/* PRO BUTTONS: ACTIVE SELECTED BUTTON LIGHTS UP RED */
 div[data-testid="stHorizontalBlock"] button[kind="primary"] {
-    background-color: #1E293B !important;
-    border: 2px solid #FFFFFF !important;
+    background-color: #381518 !important;
+    border: 2px solid #FF3B30 !important;
     border-radius: 8px !important;
     padding: 4px 12px !important;
-    color: #FFFFFF !important;
+    color: #FF3B30 !important;
     font-weight: 900 !important;
     font-size: 0.82rem !important;
     white-space: nowrap !important;
     width: auto !important;
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.35) !important;
+    box-shadow: 0 0 10px rgba(255, 59, 48, 0.45) !important;
     margin-bottom: 4px !important;
 }
 
-/* Checkbox Styling */
+/* Checkbox Styling inside Book Cards */
 div[data-testid="stCheckbox"] {
     background: #111827 !important;
     border: 1.5px solid #243048 !important;
@@ -147,7 +159,7 @@ dated_files.sort(key=lambda x: x["date"], reverse=True)
 latest_file = dated_files[0]["filename"]
 
 # --------------------------------------------------------------------------
-# 2. VERIFIED NFL HEADSHOT DATABASE (EXPANDED TO MASTER PLAYERS DB)
+# 2. VERIFIED NFL HEADSHOT DATABASE
 # --------------------------------------------------------------------------
 def clean_player_name(name):
     n = re.sub(r"\b(jr.?|sr.?|iii|ii|iv)\b", "", str(name), flags=re.IGNORECASE)
@@ -157,7 +169,6 @@ def clean_player_name(name):
 def load_verified_headshots():
     headshot_map = {}
     
-    # Sweep through Master Player Database FIRST, then active rosters
     sources = [
         ("https://github.com/nflverse/nflverse-data/releases/download/players/players.csv", "display_name", "headshot"),
         ("https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_2024.csv", "full_name", "headshot_url"),
@@ -805,6 +816,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
 
     unique_players = sorted(props_df["Player"].unique())
 
+    # PROPS STACKED VERTICALLY ONE UNDER THE OTHER FOR EACH PLAYER
     for player in unique_players:
         p_props = props_df[props_df["Player"] == player]
         team_tag = p_props["Team"].iloc[0] if not p_props.empty else ""
@@ -815,7 +827,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         grouped_props = p_props.groupby("Prop Name")
         prop_names_list = list(grouped_props.groups.keys())
 
-        # No container block wrappers around the player. We just stack the props vertically.
         for prop_name in prop_names_list:
             p_group = grouped_props.get_group(prop_name)
             dk_row = p_group[p_group["Book"] == "DraftKings"]
@@ -837,6 +848,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 else:
                     st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#0091FF; font-weight:800;">🔵 FanDuel</span>: No line posted for {prop_name} ({player})</div>', unsafe_allow_html=True)
 
+    # BACK TO TOP BUTTON
     st.markdown("""
         <div style="text-align:center; margin: 36px 0 20px 0;">
             <a href="#top_of_page" style="background:#151D2A; border:1.5px solid #2B3A52; color:#FFFFFF; padding:10px 24px; border-radius:24px; text-decoration:none; font-weight:800; font-size:0.9rem; box-shadow:0 4px 12px rgba(0,0,0,0.4);">
@@ -868,7 +880,7 @@ elif app_mode == "⚡ Pro Visualizer: Alt Lines":
         render_prop_visualizer(alt_df, is_alt_mode=True)
 
 # ==============================================================================
-# SCREEN 3: BEST OF THE BEST
+# SCREEN 3: BEST OF THE BEST (SKIP UNPOSTED ALT PROPS & PROBABILITY COLOR CODED)
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
     render_screen_header("💎 Best of the Best (Top Conviction Plays)")

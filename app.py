@@ -33,42 +33,57 @@ div[data-testid="stExpander"] summary {
     padding: 10px 16px !important;
 }
 
-/* STREAMLIT TABS (WORKS CLEANLY ACROSS ALL SCREENS) */
-[data-testid="stTabs"] {
-    background-color: #121824 !important;
+/* STREAMLIT TABS (WORKS CLEANLY ACROSS ALL SCREENS) */ 
+[data-testid="stTabs"] { 
+    background-color: #121824 !important; 
+} 
+
+[data-testid="stTabs"] div[data-baseweb="tab-list"] { 
+    gap: 8px !important; 
+    border-bottom: 2px solid #1E283D !important; 
+    background-color: #121824 !important; 
+    padding-bottom: 4px !important; 
+    margin-bottom: 12px !important; 
+} 
+
+[data-testid="stTabs"] div[data-baseweb="tab-highlight"], 
+[data-testid="stTabs"] div[data-baseweb="tab-border"] { 
+    display: none !important; 
+} 
+
+/* 1. Unselected Tabs */
+[data-testid="stTabs"] button[data-baseweb="tab"] * { 
+    color: #000000 !important; 
+    font-size: 0.90rem !important; 
+    font-weight: 800 !important; 
+    opacity: 1 !important; 
+} 
+
+/* 2. Selected/Active Tab */
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * { 
+    color: #000000 !important; 
 }
-[data-testid="stTabs"] div[data-baseweb="tab-list"] {
-    gap: 8px !important;
-    border-bottom: 2px solid #1E283D !important;
-    background-color: 121824 !important;
-    padding-bottom: 4px !important;
-    margin-bottom: 12px !important;
+
+/* 3. Hover State Override */
+[data-testid="stTabs"] button[data-baseweb="tab"]:hover * {
+    color: #000000 !important;
 }
-[data-testid="stTabs"] div[data-baseweb="tab-highlight"],
-[data-testid="stTabs"] div[data-baseweb="tab-border"] {
-    display: none !important;
+
+/* Optional: Main button layout */
+[data-testid="stTabs"] button[data-baseweb="tab"] { 
+    background-color: #121824 !important; 
+    border: 1.5px solid #23304A !important; 
+    border-radius: 12px !important; 
+    padding: 6px 16px !important; 
+    margin-right: 4px !important; 
+} 
+
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] { 
+    background-color: #1E293B !important; 
+    border: 2px solid #00E676 !important; 
+    box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important; 
 }
-[data-testid="stTabs"] button[data-baseweb="tab"] {
-    background-color: #121824 !important;
-    border: 1.5px solid #23304A !important;
-    border-radius: 12px !important;
-    padding: 6px 16px !important;
-    margin-right: 4px !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"] * {
-    color: #FFFFFF !important;
-    font-size: 0.90rem !important;
-    font-weight: 800 !important;
-    opacity: 1 !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
-    background-color: #1E293B !important;
-    border: 2px solid #00E676 !important;
-    box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
-    color: #00E676 !important;
-}
+
 
 /* Crisp Headings */
 h1, h2, h3, h4, h5, h6 {

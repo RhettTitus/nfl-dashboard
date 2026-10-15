@@ -200,23 +200,53 @@ def format_short_gametime(raw_time_str):
         return str(raw_time_str).replace(" EST", "")
 
 def extract_sanitized_prop_and_line(r):
+    # Check standard Prop column first
     p_val = r.get("Prop")
+    is_alt = False
     if pd.isna(p_val) or str(p_val).strip().lower() in ["nan", "none", "", "unposted"]:
         p_val = r.get("Milestone (Alt Line)")
+        is_alt = True
+
     if pd.isna(p_val) or str(p_val).strip().lower() in ["nan", "none", "", "unposted"]:
-        return None, None
-    p_name = str(p_val).strip()
+        return None, None, None
 
+    raw_str = str(p_val).strip()
     line_val = r.get("Line")
-    if pd.isna(line_val) or str(line_val).strip().lower() in ["nan", "none", "", "unposted"]:
-        m_num = re.search(r"(\d+(\.\d+)?)", p_name)
-        if m_num: line_val = float(m_num.group(1))
-        else: return None, None
-    else:
-        try: line_val = float(line_val)
-        except: return None, None
 
-    return p_name, line_val
+    # If it's an alt line like "75+ Rec Yds" or "75+ Rec Yds (Over 74.5)"
+    if is_alt:
+        # Extract the line threshold
+        m_over = re.search(r"Over\s*(\d+(\.\d+)?)", raw_str, re.IGNORECASE)
+        m_plus = re.search(r"(\d+(\.\d+)?)\+", raw_str)
+
+        if pd.notna(line_val) and str(line_val).strip().lower() not in ["nan", "none", "", "unposted"]:
+            try: line_f = float(line_val)
+            except: line_f = None
+        elif m_over:
+            line_f = float(m_over.group(1))
+        elif m_plus:
+            line_f = float(m_plus.group(1))
+        else:
+            return None, None, None
+
+        # Clean prop name to avoid "75 75+ Rec Yds" (extracts pure "Rec Yds")
+        pure_prop = re.sub(r"^\d+\+\s*", "", raw_str)
+        pure_prop = re.sub(r"\(.*?\)", "", pure_prop).strip()
+        display_label = f"{int(line_f) if line_f.is_integer() else line_f}+ {pure_prop}"
+        return pure_prop, line_f, display_label
+
+    else:
+        # Standard Over/Under line
+        if pd.isna(line_val) or str(line_val).strip().lower() in ["nan", "none", "", "unposted"]:
+            return None, None, None
+        try:
+            line_f = float(line_val)
+        except:
+            return None, None, None
+
+        clean_p = re.sub(r"\(.*?\)", "", raw_str).strip()
+        display_label = f"{clean_p}"
+        return clean_p, line_f, display_label
 
 def format_gambly_bet_string(player, side, line, prop_name):
     p = str(player).strip()
@@ -381,8 +411,8 @@ def render_props_cash_chart(row, last_5_raw):
         height=140, width=320
     ).configure(background="transparent").configure_view(strokeWidth=0)
 
-# SINGLE PROPS.CASH BOOK CARD
-def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk_key):
+# SINGLE PROPS.CASH BOOK CARD (HEAD-TO-HEAD DISPLAY)
+def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk_key, is_alt_mode=False):
     book_html = get_book_styled(r["Book"])
     star_badge = get_best_line_badge_html(r.get("Line_Adv_Note", ""))
     grade_char = r.get("Grade", "A")
@@ -433,6 +463,9 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     odds_str = f"({r['Odds']})" if r['Odds'] != "-" else ""
     prob_delta_str = f"({r['Prob Delta']})" if r['Prob Delta'] else ""
 
+    # CLEAN DISPLAY: NO "75 75+ Rec Yds"
+    line_display_clean = r.get("Clean_Display_Line", "")
+
     card_top_html = (
         f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-top-left-radius:14px; border-top-right-radius:14px; padding:16px 18px; border-bottom:none;">'
         f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">'
@@ -455,7 +488,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
 
         f'<div style="background:#111827; border:1px solid #1E283D; border-radius:10px; padding:10px 14px; margin-bottom:14px;">'
         f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:8px; border-bottom:1px solid #1E283D; padding-bottom:8px;">'
-        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">LINE</div><div style="font-size:16px; font-weight:900; color:#FFFFFF;">{format_clean_decimal(r["Vegas Line"])} {r["Prop Name"]}</div></div>'
+        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">LINE</div><div style="font-size:16px; font-weight:900; color:#FFFFFF;">{line_display_clean}</div></div>'
         f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">PROJECTION</div><div style="font-size:16px; font-weight:900; color:#00E676;">{format_clean_decimal(r["Model Projection"])}</div></div>'
         f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MARGIN</div><div style="font-size:16px; font-weight:900; color:{margin_color};">{margin_arrow} {margin_val:+0.1f}</div></div>'
         f'</div>'
@@ -476,7 +509,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     card_bot_html = (
         f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-top:none; padding:10px 18px 14px 18px; border-bottom-left-radius:14px; border-bottom-right-radius:14px;">'
         f'<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">'
-        f'<span style="font-size:1.15rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{r["Pick"]} {format_clean_decimal(r["Vegas Line"])} {r["Prop Name"]} <span style="font-size:0.92rem; font-weight:600; color:#94A3B8;">{odds_str}</span></span>'
+        f'<span style="font-size:1.15rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{line_display_clean} <span style="font-size:0.92rem; font-weight:600; color:#94A3B8;">{odds_str}</span></span>'
         f'<span style="font-size:1.20rem; font-weight:900; color:#00E676; letter-spacing:0.3px;">{r["EV"]} EV</span>'
         f'</div>'
         f'</div>'
@@ -484,7 +517,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     st.markdown(card_bot_html, unsafe_allow_html=True)
     st.checkbox(f"➕ Add to {r['Book']} Slip", key=chk_key)
 
-# MASTER VISUALIZER WITH DEDICATED GAME/MATCHUP & PROP CATEGORY FILTERS
+# MASTER VISUALIZER WITH MATCHUP & DETAILED CATEGORY FILTERS
 def render_prop_visualizer(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
@@ -493,14 +526,14 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
     f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns([1.2, 1, 1, 1, 1.2])
     with f_col1:
         matchup_list = ["All Matchups"] + sorted(combined_df[game_col].dropna().astype(str).unique().tolist()) if game_col else ["All Matchups"]
-        selected_matchup = st.selectbox("⚔️ Matchup:", matchup_list)
+        selected_matchup = st.selectbox("⚔️ Matchup:", matchup_list, key=f"m_{is_alt_mode}")
     with f_col2:
         team_list = ["All Teams"] + sorted(combined_df[team_col].dropna().astype(str).unique().tolist()) if team_col else ["All Teams"]
-        selected_team = st.selectbox("🏈 Team:", team_list)
+        selected_team = st.selectbox("🏈 Team:", team_list, key=f"t_{is_alt_mode}")
     with f_col3:
-        selected_pos = st.selectbox("🎯 Position:", ["All Positions", "QB", "RB", "WR", "TE"])
+        selected_pos = st.selectbox("🎯 Position:", ["All Positions", "QB", "RB", "WR", "TE"], key=f"p_{is_alt_mode}")
     with f_col4:
-        selected_book = st.selectbox("🎰 Sportsbook:", ["All Sportsbooks", "DraftKings", "FanDuel"])
+        selected_book = st.selectbox("🎰 Sportsbook:", ["All Sportsbooks", "DraftKings", "FanDuel"], key=f"b_{is_alt_mode}")
     with f_col5:
         prop_categories = [
             "All Props",
@@ -511,7 +544,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             "Receiving Yards",
             "Receptions"
         ]
-        selected_prop_filter = st.selectbox("📊 Prop Category:", prop_categories)
+        selected_prop_filter = st.selectbox("📊 Prop Category:", prop_categories, key=f"cat_{is_alt_mode}")
 
     filtered_df = combined_df.copy()
     if game_col and selected_matchup != "All Matchups":
@@ -525,7 +558,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
 
     prop_rows = []
     for _, r in filtered_df.iterrows():
-        p_name, line_f = extract_sanitized_prop_and_line(r)
+        p_name, line_f, clean_display_line = extract_sanitized_prop_and_line(r)
         if not p_name or line_f is None: continue
 
         proj = r.get("Calibrated Proj")
@@ -580,6 +613,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 "Book": book,
                 "Prop Label": f"{p_name} [{book}]",
                 "Prop Name": str(p_name),
+                "Clean_Display_Line": clean_display_line,
                 "Vegas Line": line_f,
                 "Odds": format_american_odds(odds_val),
                 "Book Win Prob": book_prob_str,
@@ -633,9 +667,9 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
     selected_fd_bets = []
 
     for _, r_check in props_df.iterrows():
-        chk_id = f"chk_{r_check['Player']}_{r_check['Book']}_{r_check['Prop Name']}_{format_clean_decimal(r_check['Vegas Line'])}"
+        chk_id = f"chk_{r_check['Player']}_{r_check['Book']}_{r_check['Prop Name']}_{format_clean_decimal(r_check['Vegas Line'])}_{is_alt_mode}"
         if st.session_state.get(chk_id, False):
-            bet_line = format_gambly_bet_string(r_check['Player'], r_check['Pick'], r_check['Vegas Line'], r_check['Prop Name'])
+            bet_line = format_gambly_bet_string(r_check['Player'], r_check['Pick'], r_check['Vegas Line'], r_check['Clean_Display_Line'])
             if r_check['Book'] == 'DraftKings': selected_dk_bets.append(bet_line)
             elif r_check['Book'] == 'FanDuel': selected_fd_bets.append(bet_line)
 
@@ -687,15 +721,15 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             with col_dk:
                 if not dk_row.empty:
                     r_dk = dk_row.iloc[0]
-                    chk_key_dk = f"chk_{r_dk['Player']}_{r_dk['Book']}_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}"
-                    render_props_cash_book_card(r_dk, player, player_depth_label, headshot_url, chk_key_dk)
+                    chk_key_dk = f"chk_{r_dk['Player']}_{r_dk['Book']}_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}_{is_alt_mode}"
+                    render_props_cash_book_card(r_dk, player, player_depth_label, headshot_url, chk_key_dk, is_alt_mode=is_alt_mode)
                 else:
                     st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#00E676; font-weight:800;">🟢 DraftKings</span>: No line posted for {prop_name} ({player})</div>', unsafe_allow_html=True)
             with col_fd:
                 if not fd_row.empty:
                     r_fd = fd_row.iloc[0]
-                    chk_key_fd = f"chk_{r_fd['Player']}_{r_fd['Book']}_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}"
-                    render_props_cash_book_card(r_fd, player, player_depth_label, headshot_url, chk_key_fd)
+                    chk_key_fd = f"chk_{r_fd['Player']}_{r_fd['Book']}_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}_{is_alt_mode}"
+                    render_props_cash_book_card(r_fd, player, player_depth_label, headshot_url, chk_key_fd, is_alt_mode=is_alt_mode)
                 else:
                     st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#0091FF; font-weight:800;">🔵 FanDuel</span>: No line posted for {prop_name} ({player})</div>', unsafe_allow_html=True)
 
@@ -742,7 +776,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
     else:
         sanitized_plays = []
         for _, r_cand in all_curated.iterrows():
-            p_n, line_f = extract_sanitized_prop_and_line(r_cand)
+            p_n, line_f, clean_display_line = extract_sanitized_prop_and_line(r_cand)
             if not p_n or line_f is None: continue
             
             proj = r_cand.get("Calibrated Proj")
@@ -762,6 +796,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
 
                 r_cand_copy = r_cand.copy()
                 r_cand_copy["Clean_Prop"] = p_n
+                r_cand_copy["Clean_Display_Line"] = clean_display_line
                 r_cand_copy["Clean_Line"] = line_f
                 r_cand_copy["_ev_val"] = ev_f
                 r_cand_copy["_model_prob"] = m_prob_norm
@@ -834,6 +869,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 p_name = row["Player"]
                 prop_n = row["Clean_Prop"]
                 line_display = format_clean_decimal(row["Clean_Line"])
+                display_label = row.get("Clean_Display_Line", f"{line_display} {prop_n}")
                 book_s = get_book_styled(row["Book"])
                 headshot_url = get_headshot_url(p_name)
 
@@ -867,7 +903,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                         st.markdown(f"📌 {prop_n} [{book_s}]", unsafe_allow_html=True)
                         st.caption(f"Action: `{row.get('Action', 'STRONG BET')}`")
                     with c3:
-                        st.markdown(f"<div style='font-size:1.10rem; font-weight:800; color:#FFFFFF;'>{side_clean} {line_display} {prop_n} <span style='color:#94A3B8; font-weight:600;'>{odds_str}</span></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size:1.10rem; font-weight:800; color:#FFFFFF;'>{display_label} <span style='color:#94A3B8; font-weight:600;'>{odds_str}</span></div>", unsafe_allow_html=True)
                         st.markdown(f"<span style='font-size:12.5px; font-weight:800; color:{m_color}; background:{m_bg}; padding:3px 8px; border-radius:5px; border:1px solid {m_border};'>Margin: {margin_val:+0.1f}</span>", unsafe_allow_html=True)
                     with c4:
                         st.markdown(f"<div style='font-size:1.25rem; font-weight:800; color:#00E676;'>{ev_clean} EV</div>", unsafe_allow_html=True)

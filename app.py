@@ -55,8 +55,9 @@ div[data-testid="stExpander"] summary {
     display: none !important; 
 } 
 
-/* 1. Unselected Tab Base Styling (Forces your dark color over Streamlit's white) */
+/* 1. Unselected Tab Base Styling (Forces dark background over inner nested containers) */
 [data-testid="stTabs"] button[data-baseweb="tab"],
+[data-testid="stTabs"] button[data-baseweb="tab"] > div,
 [data-testid="stTabs"] button[data-baseweb="tab"] div div { 
     background-color: #121824 !important; 
     border: 1.5px solid #23304A !important; 
@@ -67,13 +68,14 @@ div[data-testid="stExpander"] summary {
 
 /* 2. Selected/Active Tab State */
 [data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"],
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] > div,
 [data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] div div { 
     background-color: #1E293B !important; 
     border: 2px solid #00E676 !important; 
     box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important; 
 }
 
-/* 3. Text & Emoji Enforcement Block (Keeps text black across normal, active, and hover) */
+/* 3. Text & Emoji Enforcement Block (Forces text black over normal, active, and hover) */
 [data-testid="stTabs"] button[data-baseweb="tab"] *,
 [data-testid="stTabs"] button[data-baseweb="tab"] p,
 [data-testid="stTabs"] button[data-baseweb="tab"] span,
@@ -84,6 +86,7 @@ div[data-testid="stExpander"] summary {
     font-weight: 800 !important; 
     opacity: 1 !important; 
 } 
+
 
 
 

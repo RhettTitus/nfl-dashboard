@@ -4,6 +4,7 @@ import os
 import re
 from datetime import datetime, timedelta
 import altair as alt
+from openpyxl import load_workbook
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
@@ -329,13 +330,25 @@ file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate:", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
-# DYNAMIC FILE MODIFIED TIMESTAMP (DISPLAYED AT TOP-RIGHT OF EVERY HEADER)
-if os.path.exists(file_path):
-    mtime = os.path.getmtime(file_path)
-    file_updated_dt = datetime.fromtimestamp(mtime)
-    file_updated_str = file_updated_dt.strftime("%b %-d, %-I:%M %p EST")
-else:
-    file_updated_str = "Recently"
+# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP
+@st.cache_data(ttl=60)
+def get_file_imported_time(f_path):
+    if not os.path.exists(f_path):
+        return "Recently"
+    try:
+        wb_meta = load_workbook(f_path, read_only=True)
+        created_dt = wb_meta.properties.created or wb_meta.properties.modified
+        if created_dt:
+            # Shift UTC to EST if needed
+            est_dt = created_dt - timedelta(hours=4) if created_dt.tzinfo is None else created_dt.astimezone(pytz.timezone("US/Eastern"))
+            return est_dt.strftime("%b %-d, %-I:%M %p EST")
+    except:
+        pass
+    # Fallback to file system modified time
+    mtime = os.path.getmtime(f_path)
+    return datetime.fromtimestamp(mtime).strftime("%b %-d, %-I:%M %p EST")
+
+file_imported_str = get_file_imported_time(file_path)
 
 def render_screen_header(title_text):
     h_col1, h_col2 = st.columns([3, 1])
@@ -345,7 +358,7 @@ def render_screen_header(title_text):
         st.markdown(
             f"<div style='text-align:right; margin-top:14px;'>"
             f"<span style='background:#121824; border:1px solid #23304A; color:#94A3B8; font-size:12px; font-weight:800; padding:6px 14px; border-radius:14px; display:inline-block;'>"
-            f"🕐 Updated: <b style='color:#FFFFFF;'>{file_updated_str}</b>"
+            f"📥 Imported: <b style='color:#FFFFFF;'>{file_imported_str}</b>"
             f"</span>"
             f"</div>",
             unsafe_allow_html=True
@@ -799,261 +812,4 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             dk_row = p_group[p_group["Book"] == "DraftKings"]
             fd_row = p_group[p_group["Book"] == "FanDuel"]
 
-            col_dk, col_fd = st.columns(2)
-            with col_dk:
-                if not dk_row.empty:
-                    r_dk = dk_row.iloc[0]
-                    chk_key_dk = f"chk_{r_dk['Player']}_{r_dk['Book']}_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}_{is_alt_mode}"
-                    render_props_cash_book_card(r_dk, player, player_depth_label, headshot_url, chk_key_dk, is_alt_mode=is_alt_mode)
-                else:
-                    st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#00E676; font-weight:800;">🟢 DraftKings</span>: No line posted for {prop_name} ({player})</div>', unsafe_allow_html=True)
-            with col_fd:
-                if not fd_row.empty:
-                    r_fd = fd_row.iloc[0]
-                    chk_key_fd = f"chk_{r_fd['Player']}_{r_fd['Book']}_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}_{is_alt_mode}"
-                    render_props_cash_book_card(r_fd, player, player_depth_label, headshot_url, chk_key_fd, is_alt_mode=is_alt_mode)
-                else:
-                    st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#0091FF; font-weight:800;">🔵 FanDuel</span>: No line posted for {prop_name} ({player})</div>', unsafe_allow_html=True)
-
-    # BACK TO TOP BUTTON
-    st.markdown("""
-        <div style="text-align:center; margin: 36px 0 20px 0;">
-            <a href="#top_of_page" style="background:#151D2A; border:1.5px solid #2B3A52; color:#FFFFFF; padding:10px 24px; border-radius:24px; text-decoration:none; font-weight:800; font-size:0.9rem; box-shadow:0 4px 12px rgba(0,0,0,0.4);">
-                ⬆️ Back to Top
-            </a>
-        </div>
-    """, unsafe_allow_html=True)
-
-# ==============================================================================
-# SCREEN 1: PRO VISUALIZER (OVER / UNDER)
-# ==============================================================================
-if app_mode == "📊 Pro Visualizer: Over / Under":
-    render_screen_header("📊 Pro Visualizer: Over / Under")
-    ou_df = load_visualizer_data(["Top DK OU", "Top FD OU"])
-    if ou_df.empty:
-        st.warning("No Over/Under props found in this workbook.")
-    else:
-        render_prop_visualizer(ou_df, is_alt_mode=False)
-
-# ==============================================================================
-# SCREEN 2: PRO VISUALIZER (ALT LINES)
-# ==============================================================================
-elif app_mode == "⚡ Pro Visualizer: Alt Lines":
-    render_screen_header("⚡ Pro Visualizer: Alt Lines")
-    alt_df = load_visualizer_data(["Top DK Alt Lines", "Top FD Alt Lines"])
-    if alt_df.empty:
-        st.warning("No Alt Line props found in this workbook.")
-    else:
-        render_prop_visualizer(alt_df, is_alt_mode=True)
-
-# ==============================================================================
-# SCREEN 3: BEST OF THE BEST (SKIP UNPOSTED ALT PROPS & PROBABILITY COLOR CODED)
-# ==============================================================================
-elif app_mode == "💎 Best of the Best (Top Edges)":
-    render_screen_header("💎 Best of the Best (Top Conviction Plays)")
-    all_curated = load_visualizer_data(["Top DK OU", "Top FD OU", "Top DK Alt Lines", "Top FD Alt Lines"])
-    
-    if all_curated.empty:
-        st.warning("No plays available.")
-    else:
-        sanitized_plays = []
-        for _, r_cand in all_curated.iterrows():
-            odds_str_check = str(r_cand.get("Odds", "-")).strip()
-            if odds_str_check in ["-", "", "nan", "None"]:
-                continue
-
-            p_n, line_f, clean_display_line = extract_sanitized_prop_and_line(r_cand)
-            if not p_n or line_f is None: continue
-            
-            proj = r_cand.get("Calibrated Proj")
-            if pd.isna(proj) or str(proj).strip().lower() in ["nan", "none", "", "unposted"]:
-                proj = r_cand.get("Projection")
-            if pd.isna(proj) or str(proj).strip().lower() in ["nan", "none", "", "unposted"]: continue
-                
-            try:
-                ev_str = str(r_cand.get("EV", "-")).replace("%", "").strip()
-                ev_f = float(ev_str)
-                
-                m_prob_raw = r_cand.get("Model Win Prob")
-                m_prob_f = float(str(m_prob_raw).replace("%", "").strip()) if pd.notna(m_prob_raw) else 0.50
-                m_prob_norm = m_prob_f if abs(m_prob_f) <= 1.0 else m_prob_f / 100.0
-
-                b_prob_calc = get_or_calculate_book_prob(r_cand.get("Book Win Prob"), r_cand.get("Odds"))
-
-                r_cand_copy = r_cand.copy()
-                r_cand_copy["Clean_Prop"] = p_n
-                r_cand_copy["Clean_Display_Line"] = clean_display_line
-                r_cand_copy["Clean_Line"] = line_f
-                r_cand_copy["_ev_val"] = ev_f
-                r_cand_copy["_model_prob"] = m_prob_norm
-                r_cand_copy["_book_prob"] = b_prob_calc if b_prob_calc is not None else 0.50
-                sanitized_plays.append(r_cand_copy)
-            except:
-                pass
-
-        if not sanitized_plays:
-            st.warning("No valid plays found.")
-            st.stop()
-
-        clean_curated_df = pd.DataFrame(sanitized_plays)
-
-        c_mode = st.radio(
-            "Filter Conviction Style:",
-            [
-                "🛡️ High Probability Value (Win Prob ≥ 50%) — Best for Straight Bets & Parlays",
-                "🚀 Plus-Money Ceiling Flyers (All High EV Plays — Includes Alt Lines)"
-            ],
-            index=0
-        )
-
-        if "High Probability" in c_mode:
-            best_plays = clean_curated_df[
-                (clean_curated_df["_model_prob"] >= 0.50) & 
-                (clean_curated_df["_book_prob"] >= 0.40) &
-                (clean_curated_df["_ev_val"] >= 0.04)
-            ].sort_values(by="_ev_val", ascending=False).drop_duplicates(subset=["Player", "Clean_Prop", "Clean_Line", "Book"]).head(15)
-        else:
-            best_plays = clean_curated_df[
-                clean_curated_df["Action"].astype(str).str.contains("MAX|DUAL|ANCHOR|STRONG", case=False, na=False) |
-                (clean_curated_df["_ev_val"] >= 0.06)
-            ].sort_values(by="_ev_val", ascending=False).drop_duplicates(subset=["Player", "Clean_Prop", "Clean_Line", "Book"]).head(15)
-
-        if best_plays.empty:
-            st.info("No plays currently clearing the selected conviction threshold.")
-        else:
-            with st.expander("📋 Gambly Copy Slip (Clean Format by Sportsbook)", expanded=True):
-                best_c_book = st.selectbox(
-                    "Select Sportsbook for Copy Slip:",
-                    ["DraftKings", "FanDuel", "All Books (Combined)"],
-                    key="best_copy_book_select"
-                )
-                
-                b_slip_df = best_plays.copy()
-                if best_c_book != "All Books (Combined)":
-                    b_slip_df = b_slip_df[b_slip_df["Book"] == best_c_book]
-                    
-                b_slip_lines = []
-                for _, r_best in b_slip_df.iterrows():
-                    p = str(r_best["Player"]).strip()
-                    side = "Over" if pd.isna(r_best.get("Side")) or str(r_best.get("Side")).strip().lower() in ["nan", "none", ""] else str(r_best.get("Side")).strip()
-                    line = format_clean_decimal(r_best["Clean_Line"])
-                    prop = str(r_best["Clean_Prop"]).strip()
-                    
-                    bet_str = format_gambly_bet_string(p, side, line, prop)
-                    if bet_str and "nan" not in bet_str.lower():
-                        b_slip_lines.append(bet_str)
-                        
-                b_slip_lines = list(dict.fromkeys(b_slip_lines))
-                
-                if b_slip_lines:
-                    st.caption(f"Showing **{len(b_slip_lines)}** {best_c_book} bets (Click icon in top-right to copy):")
-                    st.code("\n".join(b_slip_lines), language="text")
-                else:
-                    st.info(f"No bets found for {best_c_book}.")
-
-            for rank, (_, row) in enumerate(best_plays.iterrows(), 1):
-                p_name = row["Player"]
-                prop_n = row["Clean_Prop"]
-                line_display = format_clean_decimal(row["Clean_Line"])
-                display_label = row.get("Clean_Display_Line", f"{line_display} {prop_n}")
-                book_s = get_book_styled(row["Book"])
-                headshot_url = get_headshot_url(p_name)
-
-                side_raw = str(row.get("Side", "")).strip()
-                side_clean = "Over" if not side_raw or side_raw.lower() in ["nan", "none"] else side_raw
-
-                odds_clean = format_american_odds(row.get("Odds", "-"))
-                odds_str = f" ({odds_clean})" if odds_clean != "-" else ""
-
-                calc_bp_best = get_or_calculate_book_prob(row.get("Book Win Prob"), row.get("Odds"))
-                book_prob = format_percentage(calc_bp_best) if calc_bp_best is not None else "-"
-                
-                b_color = "#00E676" if (calc_bp_best is not None and calc_bp_best >= 0.50) else "#FF3B30"
-                m_color_prob = "#00E676" if row.get("_model_prob", 0.5) >= 0.50 else "#FF3B30"
-
-                model_prob = format_percentage(row.get("_model_prob"))
-                ev_clean = format_percentage(row.get("EV"), is_ev=True)
-
-                proj_val = float(row.get('Calibrated Proj', row.get('Projection', 0)))
-                line_f_val = float(row.get('Clean_Line', 0))
-                margin_val = round(proj_val - line_f_val, 1) if side_clean == "Over" else round(line_f_val - proj_val, 1)
-                is_pos = margin_val >= 0
-                m_color = "#00E676" if is_pos else "#FF3B30"
-                m_bg = "#00E67610" if is_pos else "#FF3B3010"
-                m_border = "#00E67680" if is_pos else "#FF3B3080"
-
-                with st.container(border=True):
-                    c1, c2, c3, c4 = st.columns([1, 4, 3, 3])
-                    with c1:
-                        if headshot_url: st.image(headshot_url, width=65)
-                        else: st.markdown("### 🏈")
-                    with c2:
-                        st.markdown(f"<div style='font-size:1.15rem; font-weight:800; color:#FFFFFF;'>#{rank} {p_name}</div>", unsafe_allow_html=True)
-                        st.markdown(f"📌 {prop_n} [{book_s}]", unsafe_allow_html=True)
-                        st.caption(f"Action: `{row.get('Action', 'STRONG BET')}`")
-                    with c3:
-                        st.markdown(f"<div style='font-size:1.10rem; font-weight:800; color:#FFFFFF;'>{display_label} <span style='color:#94A3B8; font-weight:600;'>{odds_str}</span></div>", unsafe_allow_html=True)
-                        st.markdown(f"<span style='font-size:12.5px; font-weight:800; color:{m_color}; background:{m_bg}; padding:3px 8px; border-radius:5px; border:1px solid {m_border};'>Margin: {margin_val:+0.1f}</span>", unsafe_allow_html=True)
-                    with c4:
-                        st.markdown(f"<div style='font-size:1.25rem; font-weight:800; color:#00E676;'>{ev_clean} EV</div>", unsafe_allow_html=True)
-                        st.caption(f"Win Prob: <b style='color:{m_color_prob};'>{model_prob}</b> (Book: <b style='color:{b_color};'>{book_prob}</b>)", unsafe_allow_html=True)
-
-# ==============================================================================
-# SCREEN 4: MASTER EV TABLES (RESTORED WITH ACTIVE TABS & DETAILED FILTERS)
-# ==============================================================================
-elif app_mode == "📋 Master EV Tables":
-    render_screen_header("📋 Master EV Tables & Projections")
-
-    tab_names = [s for s in excel_data.sheet_names if s != "How To Use"]
-    tabs = st.tabs(tab_names)
-
-    for i, sheet_name in enumerate(tab_names):
-        with tabs[i]:
-            df = pd.read_excel(excel_data, sheet_name=sheet_name)
-            if df.empty:
-                st.info("No data in this sheet.")
-                continue
-
-            tf1, tf2, tf3, tf4, tf5 = st.columns([1, 1, 1, 1, 2])
-            with tf1:
-                t_list = ["All Teams"] + sorted(df["Team"].dropna().astype(str).unique().tolist()) if "Team" in df.columns else ["All Teams"]
-                f_team = st.selectbox(f"Team ({sheet_name}):", t_list, key=f"t_{sheet_name}")
-            with tf2:
-                pos_col = next((c for c in ["Pos", "Position"] if c in df.columns), None)
-                p_list = ["All Positions", "QB", "RB", "WR", "TE"] if pos_col else ["All Positions"]
-                f_pos = st.selectbox(f"Pos ({sheet_name}):", p_list, key=f"p_{sheet_name}")
-            with tf3:
-                side_list = ["All Sides", "Over", "Under"] if "Side" in df.columns else ["All Sides"]
-                f_side = st.selectbox(f"Side ({sheet_name}):", side_list, key=f"s_{sheet_name}")
-            with tf4:
-                act_col = "Action" if "Action" in df.columns else None
-                act_list = ["All Actions", "MAX BET", "ANCHOR", "STRONG BET"] if act_col else ["All Actions"]
-                f_act = st.selectbox(f"Action ({sheet_name}):", act_list, key=f"a_{sheet_name}")
-            with tf5:
-                f_search = st.text_input(f"🔍 Search ({sheet_name}):", "", key=f"sr_{sheet_name}")
-
-            if f_team != "All Teams" and "Team" in df.columns:
-                df = df[df["Team"].astype(str) == f_team]
-            if f_pos != "All Positions" and pos_col:
-                df = df[df[pos_col].astype(str).str.contains(f_pos, case=False, na=False)]
-            if f_side != "All Sides" and "Side" in df.columns:
-                df = df[df["Side"].astype(str) == f_side]
-            if f_act != "All Actions" and act_col:
-                df = df[df["Action"].astype(str).str.contains(f_act, case=False, na=False)]
-            if f_search:
-                mask = df.astype(str).apply(lambda row: row.str.contains(f_search, case=False).any(), axis=1)
-                df = df[mask]
-
-            for col in df.columns:
-                if "EV" in col or "Market EV" in col:
-                    df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=True))
-                elif any(w in col for w in ["Prob", "Probability", "Win Prob"]):
-                    df[col] = df[col].apply(lambda x: format_percentage(x, is_ev=False))
-                elif any(w in col for w in ["Line", "Projection", "Calibrated Proj"]):
-                    df[col] = df[col].apply(format_clean_decimal)
-                elif col == "Odds":
-                    df[col] = df[col].apply(format_american_odds)
-
-            df = df.drop(columns=[c for c in ["GameSortKey", "SortScore", "CleanName"] if c in df.columns])
-
-            st.dataframe(df, use_container_width=True, height=380)
+            col_dk

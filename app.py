@@ -2,10 +2,9 @@ import streamlit as st
 import pandas as pd
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import altair as alt
 from openpyxl import load_workbook
-import pytz
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
@@ -331,7 +330,7 @@ file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate:", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
-# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP
+# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP (STANDARD LIBRARY SAFE)
 @st.cache_data(ttl=60)
 def get_file_imported_time(f_path):
     if not os.path.exists(f_path):
@@ -340,7 +339,8 @@ def get_file_imported_time(f_path):
         wb_meta = load_workbook(f_path, read_only=True)
         created_dt = wb_meta.properties.created or wb_meta.properties.modified
         if created_dt:
-            est_dt = created_dt - timedelta(hours=4) if created_dt.tzinfo is None else created_dt.astimezone(pytz.timezone("US/Eastern"))
+            # Shift UTC to EST standard offset (-4h)
+            est_dt = created_dt - timedelta(hours=4)
             return est_dt.strftime("%b %-d, %-I:%M %p EST")
     except:
         pass

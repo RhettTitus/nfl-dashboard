@@ -67,24 +67,16 @@ div[data-testid="stExpander"] summary {
     box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important; 
 }
 
-/* 3. ABSOLUTE TEXT BLACK ENFORCEMENT */
-/* This targets raw internal elements directly to force black text everywhere */
-[data-testid="stTabs"] button[data-baseweb="tab"] p,
-[data-testid="stTabs"] button[data-baseweb="tab"] span,
-[data-testid="stTabs"] button[data-baseweb="tab"] div,
-[data-testid="stTabs"] button[data-baseweb="tab"] h1,
-[data-testid="stTabs"] button[data-baseweb="tab"] h2,
-[data-testid="stTabs"] button[data-baseweb="tab"] h3,
-[data-testid="stTabs"] button[data-baseweb="tab"] .stMarkdown p,
-[data-testid="stTabs"] button[data-baseweb="tab"]:hover p,
-[data-testid="stTabs"] button[data-baseweb="tab"]:hover span,
-[data-testid="stTabs"] button[data-baseweb="tab"]:hover div {
+/* 3. Global Text Color Enforcement */
+[data-testid="stTabs"] button[data-baseweb="tab"] *,
+[data-testid="stTabs"] button[data-baseweb="tab"]:hover * { 
     color: #000000 !important; 
-    -webkit-text-fill-color: #000000 !important; /* Overrides internal webkit rendering */
+    -webkit-text-fill-color: #000000 !important;
     font-size: 0.90rem !important; 
     font-weight: 800 !important; 
     opacity: 1 !important; 
-}
+} 
+
 
 
 

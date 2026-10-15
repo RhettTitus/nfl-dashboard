@@ -358,7 +358,7 @@ def render_screen_header(title_text):
         st.markdown(
             f"<div style='text-align:right; margin-top:14px;'>"
             f"<span style='background:#121824; border:1px solid #23304A; color:#94A3B8; font-size:12px; font-weight:800; padding:6px 14px; border-radius:14px; display:inline-block;'>"
-            f"📥 Imported: <b style='color:#FFFFFF;'>{file_imported_str}</b>"
+            f"📥 Last Imported: <b style='color:#FFFFFF;'>{file_imported_str}</b>"
             f"</span>"
             f"</div>",
             unsafe_allow_html=True

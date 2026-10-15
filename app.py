@@ -5,7 +5,6 @@ import re
 from datetime import datetime, timedelta
 import altair as alt
 from openpyxl import load_workbook
-import pytz
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
@@ -98,8 +97,8 @@ div[data-testid="stCheckbox"] {
     background: #111827 !important;
     border: 1.5px solid #243048 !important;
     border-top: none !important;
-    border-bottom-left-radius: 12px !important;
-    border-bottom-right-radius: 12px !important;
+    border-bottom-left-radius: 14px !important;
+    border-bottom-right-radius: 14px !important;
     padding: 8px 16px !important;
     margin-top: -6px !important;
     margin-bottom: 16px !important;
@@ -331,7 +330,7 @@ file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate:", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
-# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP
+# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP (STANDARD LIBRARY SAFE)
 @st.cache_data(ttl=60)
 def get_file_imported_time(f_path):
     if not os.path.exists(f_path):
@@ -366,7 +365,6 @@ st.session_state["app_mode"] = app_mode
 def render_screen_header(title_text):
     other_screens = [k for k in screens_dict.keys() if k != app_mode]
     
-    # RENDER STYLIZED HTML FORM BUTTONS SPANNING THE WIDTH OF THE PAGE
     nav_html = '<div style="display:flex; justify-content:space-between; align-items:center; width:100%; gap:12px; margin-bottom:18px;">'
     for s_key in other_screens:
         screen_label = screens_dict[s_key]
@@ -391,7 +389,6 @@ def render_screen_header(title_text):
     nav_html += '</div>'
     st.markdown(nav_html, unsafe_allow_html=True)
 
-    # Handle query param navigation
     query_screen = st.query_params.get("screen")
     if query_screen and query_screen in screens_dict and query_screen != app_mode:
         st.session_state["app_mode"] = query_screen

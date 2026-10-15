@@ -33,19 +33,41 @@ div[data-testid="stExpander"] summary {
     padding: 10px 16px !important;
 }
 
-/* KILLS RESIDUAL TABS DOM ARTIFACTS ONLY (DO NOT HIDE EXPANDERS) */
-div[data-baseweb="tab-list"],
-div[data-testid="stTabs"] {
+/* STREAMLIT TABS (WORKS CLEANLY ACROSS ALL SCREENS) */
+[data-testid="stTabs"] {
+    background-color: transparent !important;
+}
+[data-testid="stTabs"] div[data-baseweb="tab-list"] {
+    gap: 8px !important;
+    border-bottom: 2px solid #1E283D !important;
+    background-color: transparent !important;
+    padding-bottom: 4px !important;
+    margin-bottom: 12px !important;
+}
+[data-testid="stTabs"] div[data-baseweb="tab-highlight"],
+[data-testid="stTabs"] div[data-baseweb="tab-border"] {
     display: none !important;
 }
-
-/* MASTER CARD CONTAINER */
-div[data-testid="stVerticalBlockBorderWrapper"] > div {
-    background-color: rgb(12, 17, 28) !important;
-    border: 1.5px solid rgb(30, 40, 61) !important;
-    border-radius: 16px !important;
-    padding: 14px 18px !important;
-    box-shadow: rgba(0, 0, 0, 0.4) 0px 6px 16px !important;
+[data-testid="stTabs"] button[data-baseweb="tab"] {
+    background-color: #121824 !important;
+    border: 1.5px solid #23304A !important;
+    border-radius: 12px !important;
+    padding: 6px 16px !important;
+    margin-right: 4px !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"] * {
+    color: #FFFFFF !important;
+    font-size: 0.90rem !important;
+    font-weight: 800 !important;
+    opacity: 1 !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
+    background-color: #1E293B !important;
+    border: 2px solid #00E676 !important;
+    box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
+    color: #00E676 !important;
 }
 
 /* Crisp Headings */
@@ -70,45 +92,16 @@ div[data-baseweb="popover"] {
     background-color: #121824 !important;
 }
 
-/* PRO BUTTONS: INACTIVE BUTTONS */
-div[data-testid="stHorizontalBlock"] button[kind="secondary"] {
-    background-color: #151D2A !important;
-    border: 1.5px solid #2B3A52 !important;
-    border-radius: 8px !important;
-    padding: 4px 12px !important;
-    color: #FFFFFF !important;
-    font-weight: 800 !important;
-    font-size: 0.82rem !important;
-    white-space: nowrap !important;
-    width: auto !important;
-    margin-bottom: 4px !important;
-}
-
-/* PRO BUTTONS: ACTIVE SELECTED BUTTON LIGHTS UP RED */
-div[data-testid="stHorizontalBlock"] button[kind="primary"] {
-    background-color: #381518 !important;
-    border: 2px solid #FF3B30 !important;
-    border-radius: 8px !important;
-    padding: 4px 12px !important;
-    color: #FF3B30 !important;
-    font-weight: 900 !important;
-    font-size: 0.82rem !important;
-    white-space: nowrap !important;
-    width: auto !important;
-    box-shadow: 0 0 10px rgba(255, 59, 48, 0.45) !important;
-    margin-bottom: 4px !important;
-}
-
-/* Checkbox Styling inside Book Cards */
+/* Flush Checkbox inside Book Card */
 div[data-testid="stCheckbox"] {
     background: #111827 !important;
     border: 1.5px solid #243048 !important;
     border-top: none !important;
-    border-bottom-left-radius: 12px !important;
-    border-bottom-right-radius: 12px !important;
+    border-bottom-left-radius: 14px !important;
+    border-bottom-right-radius: 14px !important;
     padding: 8px 16px !important;
-    margin-top: -8px !important;
-    margin-bottom: 10px !important;
+    margin-top: -6px !important;
+    margin-bottom: 16px !important;
 }
 div[data-testid="stCheckbox"] label span:first-child {
     width: 18px !important;
@@ -168,7 +161,6 @@ def clean_player_name(name):
 @st.cache_data(ttl=86400)
 def load_verified_headshots():
     headshot_map = {}
-    
     sources = [
         ("https://github.com/nflverse/nflverse-data/releases/download/players/players.csv", "display_name", "headshot"),
         ("https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_2024.csv", "full_name", "headshot_url"),
@@ -184,7 +176,6 @@ def load_verified_headshots():
                     headshot_map[c_name] = str(row[hs_col])
         except Exception:
             pass
-            
     return headshot_map
 
 headshot_db = load_verified_headshots()
@@ -568,8 +559,9 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
         odds_str = f"<span style='font-size:0.92rem; font-weight:600; color:#94A3B8;'>({odds_raw_val})</span>"
 
     line_display_clean = r.get("Clean_Display_Line", "")
+    
     if "+" in line_display_clean:
-        full_pick_string = line_display_clean
+        full_pick_string = f"{r['Pick']} {line_display_clean}"
     else:
         full_pick_string = f"{r['Pick']} {format_clean_decimal(r['Vegas Line'])} {line_display_clean}"
 
@@ -624,7 +616,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     st.markdown(card_bot_html, unsafe_allow_html=True)
     st.checkbox(f"➕ Add to {r['Book']} Slip", key=chk_key)
 
-# MASTER VISUALIZER WITH MATCHUP & DETAILED CATEGORY FILTERS
+# MASTER VISUALIZER WITH FOLDER TABS
 def render_prop_visualizer(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
@@ -781,7 +773,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         if st.session_state.get(chk_id, False):
             line_display_clean = r_check.get("Clean_Display_Line", "")
             if "+" in line_display_clean:
-                bet_line = f"{r_check['Player']} {line_display_clean}"
+                bet_line = f"{r_check['Player']} {r_check['Pick']} {line_display_clean}"
             else:
                 bet_line = format_gambly_bet_string(r_check['Player'], r_check['Pick'], r_check['Vegas Line'], r_check['Clean_Display_Line'])
             
@@ -816,7 +808,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
 
     unique_players = sorted(props_df["Player"].unique())
 
-    # PROPS STACKED VERTICALLY ONE UNDER THE OTHER FOR EACH PLAYER
     for player in unique_players:
         p_props = props_df[props_df["Player"] == player]
         team_tag = p_props["Team"].iloc[0] if not p_props.empty else ""
@@ -827,26 +818,62 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         grouped_props = p_props.groupby("Prop Name")
         prop_names_list = list(grouped_props.groups.keys())
 
-        for prop_name in prop_names_list:
-            p_group = grouped_props.get_group(prop_name)
-            dk_row = p_group[p_group["Book"] == "DraftKings"]
-            fd_row = p_group[p_group["Book"] == "FanDuel"]
+        with st.container(border=True):
+            st.markdown(
+                f'<div style="display:flex; align-items:center; justify-content:flex-end; gap:12px; margin-bottom:12px;">'
+                f'<div style="text-align:right;">'
+                f'<div style="font-size:0.92rem; color:#00E676; font-weight:800; letter-spacing:0.3px; margin-bottom:2px;">{player_depth_label}</div>'
+                f'<div style="font-size:1.45rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{player}</div>'
+                f'</div>'
+                f'<img src="{headshot_url}" style="width:70px; height:70px; border-radius:50%; object-fit:cover; border:2.5px solid #00E676; background:#1C2436; box-shadow:0 0 12px rgba(0,230,118,0.25);">'
+                f'</div>',
+                unsafe_allow_html=True
+            )
 
-            col_dk, col_fd = st.columns(2)
-            with col_dk:
-                if not dk_row.empty:
-                    r_dk = dk_row.iloc[0]
-                    chk_key_dk = f"chk_{r_dk['Player']}_{r_dk['Book']}_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}_{is_alt_mode}"
-                    render_props_cash_book_card(r_dk, player, player_depth_label, headshot_url, chk_key_dk, is_alt_mode=is_alt_mode)
-                else:
-                    st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#00E676; font-weight:800;">🟢 DraftKings</span>: No line posted for {prop_name} ({player})</div>', unsafe_allow_html=True)
-            with col_fd:
-                if not fd_row.empty:
-                    r_fd = fd_row.iloc[0]
-                    chk_key_fd = f"chk_{r_fd['Player']}_{r_fd['Book']}_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}_{is_alt_mode}"
-                    render_props_cash_book_card(r_fd, player, player_depth_label, headshot_url, chk_key_fd, is_alt_mode=is_alt_mode)
-                else:
-                    st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#0091FF; font-weight:800;">🔵 FanDuel</span>: No line posted for {prop_name} ({player})</div>', unsafe_allow_html=True)
+            if len(prop_names_list) > 1:
+                prop_tabs = st.tabs([f"📁 {pn}" for pn in prop_names_list])
+                for t_idx, prop_name in enumerate(prop_names_list):
+                    with prop_tabs[t_idx]:
+                        p_group = grouped_props.get_group(prop_name)
+                        dk_row = p_group[p_group["Book"] == "DraftKings"]
+                        fd_row = p_group[p_group["Book"] == "FanDuel"]
+
+                        col_dk, col_fd = st.columns(2)
+                        with col_dk:
+                            if not dk_row.empty:
+                                r_dk = dk_row.iloc[0]
+                                chk_key_dk = f"chk_{r_dk['Player']}_{r_dk['Book']}_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}_{is_alt_mode}"
+                                render_props_cash_book_card(r_dk, player, player_depth_label, headshot_url, chk_key_dk, is_alt_mode=is_alt_mode)
+                            else:
+                                st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#00E676; font-weight:800;">🟢 DraftKings</span>: No line posted for {prop_name}</div>', unsafe_allow_html=True)
+                        with col_fd:
+                            if not fd_row.empty:
+                                r_fd = fd_row.iloc[0]
+                                chk_key_fd = f"chk_{r_fd['Player']}_{r_fd['Book']}_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}_{is_alt_mode}"
+                                render_props_cash_book_card(r_fd, player, player_depth_label, headshot_url, chk_key_fd, is_alt_mode=is_alt_mode)
+                            else:
+                                st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#0091FF; font-weight:800;">🔵 FanDuel</span>: No line posted for {prop_name}</div>', unsafe_allow_html=True)
+            else:
+                prop_name = prop_names_list[0]
+                p_group = grouped_props.get_group(prop_name)
+                dk_row = p_group[p_group["Book"] == "DraftKings"]
+                fd_row = p_group[p_group["Book"] == "FanDuel"]
+
+                col_dk, col_fd = st.columns(2)
+                with col_dk:
+                    if not dk_row.empty:
+                        r_dk = dk_row.iloc[0]
+                        chk_key_dk = f"chk_{r_dk['Player']}_{r_dk['Book']}_{r_dk['Prop Name']}_{format_clean_decimal(r_dk['Vegas Line'])}_{is_alt_mode}"
+                        render_props_cash_book_card(r_dk, player, player_depth_label, headshot_url, chk_key_dk, is_alt_mode=is_alt_mode)
+                    else:
+                        st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#00E676; font-weight:800;">🟢 DraftKings</span>: No line posted for {prop_name}</div>', unsafe_allow_html=True)
+                with col_fd:
+                    if not fd_row.empty:
+                        r_fd = fd_row.iloc[0]
+                        chk_key_fd = f"chk_{r_fd['Player']}_{r_fd['Book']}_{r_fd['Prop Name']}_{format_clean_decimal(r_fd['Vegas Line'])}_{is_alt_mode}"
+                        render_props_cash_book_card(r_fd, player, player_depth_label, headshot_url, chk_key_fd, is_alt_mode=is_alt_mode)
+                    else:
+                        st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#0091FF; font-weight:800;">🔵 FanDuel</span>: No line posted for {prop_name}</div>', unsafe_allow_html=True)
 
     # BACK TO TOP BUTTON
     st.markdown("""
@@ -1016,7 +1043,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 m_border = "#00E67680" if is_pos else "#FF3B3080"
 
                 if "+" in display_label:
-                    full_pick_string = display_label
+                    full_pick_string = f"{side_clean} {display_label}"
                 else:
                     full_pick_string = f"{side_clean} {line_display} {display_label}"
 

@@ -344,22 +344,23 @@ def get_file_imported_time(f_path):
             return est_dt.strftime("%b %-d, %-I:%M %p EST")
     except:
         pass
-    # Fallback to file system modified time
     mtime = os.path.getmtime(f_path)
     return datetime.fromtimestamp(mtime).strftime("%b %-d, %-I:%M %p EST")
 
 file_imported_str = get_file_imported_time(file_path)
 
+# HEADER WITH STACKED 2-LINE TIMESTAMP BADGE
 def render_screen_header(title_text):
     h_col1, h_col2 = st.columns([3, 1])
     with h_col1:
         st.markdown(f"<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>{title_text}</h1>", unsafe_allow_html=True)
     with h_col2:
         st.markdown(
-            f"<div style='text-align:right; margin-top:14px;'>"
-            f"<span style='background:#121824; border:1px solid #23304A; color:#94A3B8; font-size:12px; font-weight:800; padding:6px 14px; border-radius:14px; display:inline-block;'>"
-            f"📥 Imported: <b style='color:#FFFFFF;'>{file_imported_str}</b>"
-            f"</span>"
+            f"<div style='text-align:right; margin-top:8px;'>"
+            f"<div style='background:#121824; border:1px solid #23304A; border-radius:10px; padding:6px 12px; display:inline-block; text-align:right;'>"
+            f"<div style='color:#94A3B8; font-size:10.5px; font-weight:800; letter-spacing:0.5px; text-transform:uppercase;'>Last Updated</div>"
+            f"<div style='color:#FFFFFF; font-size:12.5px; font-weight:800; margin-top:1px;'>{file_imported_str}</div>"
+            f"</div>"
             f"</div>",
             unsafe_allow_html=True
         )

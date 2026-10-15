@@ -9,10 +9,19 @@ from openpyxl import load_workbook
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
 # --------------------------------------------------------------------------
-# PROPS.CASH THEME & HEAD-TO-HEAD CSS
+# PROPS.CASH THEME & ULTRA-WIDE FULL-PAGE SPREADSHEET CSS
 # --------------------------------------------------------------------------
 st.markdown("""
 <style>
+/* EXPAND APP CONTAINER TO 100% OF BROWSER WIDTH */
+.main .block-container {
+    max-width: 100% !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+    padding-top: 1rem !important;
+    padding-bottom: 2rem !important;
+}
+
 html, body, [class*="css"], .stApp {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
     background-color: #07090E !important;
@@ -68,6 +77,14 @@ div[data-testid="stExpander"] summary {
 }
 [data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
     color: #00E676 !important;
+}
+
+/* FULL-PAGE EXPANDED DATAFRAME */
+[data-testid="stDataFrame"] {
+    width: 100% !important;
+}
+[data-testid="stDataFrame"] > div {
+    width: 100% !important;
 }
 
 /* Crisp Headings */
@@ -330,7 +347,6 @@ file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate:", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
-# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP
 @st.cache_data(ttl=60)
 def get_file_imported_time(f_path):
     if not os.path.exists(f_path):
@@ -339,12 +355,10 @@ def get_file_imported_time(f_path):
         wb_meta = load_workbook(f_path, read_only=True)
         created_dt = wb_meta.properties.created or wb_meta.properties.modified
         if created_dt:
-            # Shift UTC to EST if needed
             est_dt = created_dt - timedelta(hours=4) if created_dt.tzinfo is None else created_dt.astimezone(pytz.timezone("US/Eastern"))
             return est_dt.strftime("%b %-d, %-I:%M %p EST")
     except:
         pass
-    # Fallback to file system modified time
     mtime = os.path.getmtime(f_path)
     return datetime.fromtimestamp(mtime).strftime("%b %-d, %-I:%M %p EST")
 
@@ -358,7 +372,7 @@ def render_screen_header(title_text):
         st.markdown(
             f"<div style='text-align:right; margin-top:14px;'>"
             f"<span style='background:#121824; border:1px solid #23304A; color:#94A3B8; font-size:12px; font-weight:800; padding:6px 14px; border-radius:14px; display:inline-block;'>"
-            f"📥 Last Imported: <b style='color:#FFFFFF;'>{file_imported_str}</b>"
+            f"📥 Imported: <b style='color:#FFFFFF;'>{file_imported_str}</b>"
             f"</span>"
             f"</div>",
             unsafe_allow_html=True
@@ -519,7 +533,6 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     margin_arrow = "▲" if is_pos else "▼"
     margin_color = "#00E676" if is_pos else "#FF3B30"
 
-    # PARLAY LIKELIHOOD: >= 50% IS GREEN (FAVORED TO HIT), < 50% IS RED (UNDERDOG)
     raw_bp = r.get("_raw_book_prob")
     try:
         val_clean = float(str(raw_bp).replace("%", "").strip())
@@ -529,7 +542,6 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
 
     b_prob_color = "#00E676" if norm_bp >= 0.50 else "#FF3B30"
 
-    # MODEL WIN PROB: >= 50% IS GREEN, < 50% IS RED
     raw_mp = r.get("Win Prob")
     try:
         val_clean_m = float(str(raw_mp).replace("%", "").strip())
@@ -1012,7 +1024,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                         st.caption(f"Win Prob: <b style='color:{m_color_prob};'>{model_prob}</b> (Book: <b style='color:{b_color};'>{book_prob}</b>)", unsafe_allow_html=True)
 
 # ==============================================================================
-# SCREEN 4: MASTER EV TABLES (RESTORED WITH ACTIVE TABS & DETAILED FILTERS)
+# SCREEN 4: MASTER EV TABLES (EXPANDED TO FULL SCREEN WIDTH & HEIGHT)
 # ==============================================================================
 elif app_mode == "📋 Master EV Tables":
     render_screen_header("📋 Master EV Tables & Projections")
@@ -1027,7 +1039,7 @@ elif app_mode == "📋 Master EV Tables":
                 st.info("No data in this sheet.")
                 continue
 
-            tf1, tf2, tf3, tf4, tf5 = st.columns([1, 1, 1, 1, 2])
+            tf1, tf2, tf3, tf4, tf5 = st.columns([1.2, 1, 1, 1, 2])
             with tf1:
                 t_list = ["All Teams"] + sorted(df["Team"].dropna().astype(str).unique().tolist()) if "Team" in df.columns else ["All Teams"]
                 f_team = st.selectbox(f"Team ({sheet_name}):", t_list, key=f"t_{sheet_name}")
@@ -1069,4 +1081,6 @@ elif app_mode == "📋 Master EV Tables":
 
             df = df.drop(columns=[c for c in ["GameSortKey", "SortScore", "CleanName"] if c in df.columns])
 
-            st.dataframe(df, use_container_width=True, height=380)
+            # FIT TO SCREEN: REMOVE CONSTRAINED HEIGHT TO PREVENT INTERNAL SCROLLING
+            table_height = min(max((len(df) + 1) * 36, 250), 900)
+            st.dataframe(df, use_container_width=True, height=table_height)

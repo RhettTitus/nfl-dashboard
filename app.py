@@ -33,19 +33,41 @@ div[data-testid="stExpander"] summary {
     padding: 10px 16px !important;
 }
 
-/* KILLS RESIDUAL TABS DOM ARTIFACTS ONLY (DO NOT HIDE EXPANDERS) */
-div[data-baseweb="tab-list"],
-div[data-testid="stTabs"] {
+/* STREAMLIT TABS (WORKS CLEANLY ACROSS ALL SCREENS) */
+[data-testid="stTabs"] {
+    background-color: transparent !important;
+}
+[data-testid="stTabs"] div[data-baseweb="tab-list"] {
+    gap: 8px !important;
+    border-bottom: 2px solid #1E283D !important;
+    background-color: transparent !important;
+    padding-bottom: 4px !important;
+    margin-bottom: 12px !important;
+}
+[data-testid="stTabs"] div[data-baseweb="tab-highlight"],
+[data-testid="stTabs"] div[data-baseweb="tab-border"] {
     display: none !important;
 }
-
-/* MASTER CARD CONTAINER */
-div[data-testid="stVerticalBlockBorderWrapper"] > div {
-    background-color: rgb(12, 17, 28) !important;
-    border: 1.5px solid rgb(30, 40, 61) !important;
-    border-radius: 16px !important;
-    padding: 14px 18px !important;
-    box-shadow: rgba(0, 0, 0, 0.4) 0px 6px 16px !important;
+[data-testid="stTabs"] button[data-baseweb="tab"] {
+    background-color: #121824 !important;
+    border: 1.5px solid #23304A !important;
+    border-radius: 12px !important;
+    padding: 6px 16px !important;
+    margin-right: 4px !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"] * {
+    color: #FFFFFF !important;
+    font-size: 0.90rem !important;
+    font-weight: 800 !important;
+    opacity: 1 !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
+    background-color: #1E293B !important;
+    border: 2px solid #00E676 !important;
+    box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
+    color: #00E676 !important;
 }
 
 /* Crisp Headings */
@@ -70,45 +92,16 @@ div[data-baseweb="popover"] {
     background-color: #121824 !important;
 }
 
-/* PRO BUTTONS: INACTIVE BUTTONS */
-div[data-testid="stHorizontalBlock"] button[kind="secondary"] {
-    background-color: #151D2A !important;
-    border: 1.5px solid #2B3A52 !important;
-    border-radius: 8px !important;
-    padding: 4px 12px !important;
-    color: #FFFFFF !important;
-    font-weight: 800 !important;
-    font-size: 0.82rem !important;
-    white-space: nowrap !important;
-    width: auto !important;
-    margin-bottom: 4px !important;
-}
-
-/* PRO BUTTONS: ACTIVE SELECTED BUTTON LIGHTS UP RED */
-div[data-testid="stHorizontalBlock"] button[kind="primary"] {
-    background-color: #381518 !important;
-    border: 2px solid #FF3B30 !important;
-    border-radius: 8px !important;
-    padding: 4px 12px !important;
-    color: #FF3B30 !important;
-    font-weight: 900 !important;
-    font-size: 0.82rem !important;
-    white-space: nowrap !important;
-    width: auto !important;
-    box-shadow: 0 0 10px rgba(255, 59, 48, 0.45) !important;
-    margin-bottom: 4px !important;
-}
-
-/* Checkbox Styling inside Book Cards */
+/* Flush Checkbox inside Book Card */
 div[data-testid="stCheckbox"] {
     background: #111827 !important;
     border: 1.5px solid #243048 !important;
     border-top: none !important;
-    border-bottom-left-radius: 12px !important;
-    border-bottom-right-radius: 12px !important;
+    border-bottom-left-radius: 14px !important;
+    border-bottom-right-radius: 14px !important;
     padding: 8px 16px !important;
-    margin-top: -8px !important;
-    margin-bottom: 10px !important;
+    margin-top: -6px !important;
+    margin-bottom: 16px !important;
 }
 div[data-testid="stCheckbox"] label span:first-child {
     width: 18px !important;
@@ -168,23 +161,16 @@ def clean_player_name(name):
 @st.cache_data(ttl=86400)
 def load_verified_headshots():
     headshot_map = {}
-    
-    sources = [
-        ("https://github.com/nflverse/nflverse-data/releases/download/players/players.csv", "display_name", "headshot"),
-        ("https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_2024.csv", "full_name", "headshot_url"),
-        ("https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_2023.csv", "full_name", "headshot_url")
-    ]
-    
-    for url, name_col, hs_col in sources:
+    for yr in [2024, 2023]:
         try:
-            df = pd.read_csv(url, usecols=[name_col, hs_col]).dropna()
+            url = f"https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_{yr}.csv"
+            df = pd.read_csv(url, usecols=["full_name", "headshot_url"]).dropna()
             for _, row in df.iterrows():
-                c_name = clean_player_name(row[name_col])
+                c_name = clean_player_name(row["full_name"])
                 if c_name and c_name not in headshot_map:
-                    headshot_map[c_name] = str(row[hs_col])
+                    headshot_map[c_name] = str(row["headshot_url"])
         except Exception:
             pass
-            
     return headshot_map
 
 headshot_db = load_verified_headshots()
@@ -532,6 +518,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     margin_arrow = "▲" if is_pos else "▼"
     margin_color = "#00E676" if is_pos else "#FF3B30"
 
+    # PARLAY LIKELIHOOD: >= 50% IS GREEN (FAVORED TO HIT), < 50% IS RED (UNDERDOG)
     raw_bp = r.get("_raw_book_prob")
     try:
         val_clean = float(str(raw_bp).replace("%", "").strip())
@@ -541,6 +528,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
 
     b_prob_color = "#00E676" if norm_bp >= 0.50 else "#FF3B30"
 
+    # MODEL WIN PROB: >= 50% IS GREEN, < 50% IS RED
     raw_mp = r.get("Win Prob")
     try:
         val_clean_m = float(str(raw_mp).replace("%", "").strip())
@@ -568,6 +556,8 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
         odds_str = f"<span style='font-size:0.92rem; font-weight:600; color:#94A3B8;'>({odds_raw_val})</span>"
 
     line_display_clean = r.get("Clean_Display_Line", "")
+
+    # RESOLVE FULL BET STRING (e.g. Over 17.5 Rec Yds vs 75+ Rec Yds)
     if "+" in line_display_clean:
         full_pick_string = line_display_clean
     else:
@@ -705,7 +695,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             live_sig = str(r.get("Live Signal", "-"))
 
             calc_bp = get_or_calculate_book_prob(book_prob_raw, odds_val)
-            book_prob_str = format_percentage(calc_bp) if calc_bp is not None else ("Unposted" if odds_val in ["-", "nan", "None", ""] else "-")
+            book_prob_str = format_percentage(calc_bp) if calc_bp is not None else "-"
 
             prob_delta_str = None
             if calc_bp is not None and str(model_prob).strip() not in ["-", "nan", ""]:
@@ -779,6 +769,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
     for _, r_check in props_df.iterrows():
         chk_id = f"chk_{r_check['Player']}_{r_check['Book']}_{r_check['Prop Name']}_{format_clean_decimal(r_check['Vegas Line'])}_{is_alt_mode}"
         if st.session_state.get(chk_id, False):
+            # Properly format the Gambly slip based on alt vs standard lines
             line_display_clean = r_check.get("Clean_Display_Line", "")
             if "+" in line_display_clean:
                 bet_line = f"{r_check['Player']} {line_display_clean}"
@@ -880,7 +871,7 @@ elif app_mode == "⚡ Pro Visualizer: Alt Lines":
         render_prop_visualizer(alt_df, is_alt_mode=True)
 
 # ==============================================================================
-# SCREEN 3: BEST OF THE BEST (SKIP UNPOSTED ALT PROPS & PROBABILITY COLOR CODED)
+# SCREEN 3: BEST OF THE BEST
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
     render_screen_header("💎 Best of the Best (Top Conviction Plays)")
@@ -988,7 +979,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 p_name = row["Player"]
                 prop_n = row["Clean_Prop"]
                 line_display = format_clean_decimal(row["Clean_Line"])
-                display_label = row.get("Clean_Display_Line", f"{line_display} {prop_n}")
+                clean_disp = row.get("Clean_Display_Line", prop_n)
                 book_s = get_book_styled(row["Book"])
                 headshot_url = get_headshot_url(p_name)
 
@@ -1015,10 +1006,10 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 m_bg = "#00E67610" if is_pos else "#FF3B3010"
                 m_border = "#00E67680" if is_pos else "#FF3B3080"
 
-                if "+" in display_label:
-                    full_pick_string = display_label
+                if "+" in clean_disp:
+                    full_pick_string = clean_disp
                 else:
-                    full_pick_string = f"{side_clean} {line_display} {display_label}"
+                    full_pick_string = f"{side_clean} {line_display} {clean_disp}"
 
                 with st.container(border=True):
                     c1, c2, c3, c4 = st.columns([1, 4, 3, 3])

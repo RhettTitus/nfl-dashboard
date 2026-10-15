@@ -51,17 +51,7 @@ div[data-testid="stExpander"] summary {
     display: none !important; 
 } 
 
-/* 1. FORCE INNER WRAPPER BACKGROUNDS (Strips the white capsules completely) */
-[data-testid="stTabs"] div[data-baseweb="tab"] {
-    background-color: #121824 !important;
-    border-radius: 12px !important;
-}
-
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] div[data-baseweb="tab"] {
-    background-color: #1E293B !important;
-}
-
-/* 2. Unselected Tabs Layout */
+/* 1. Unselected Tabs */
 [data-testid="stTabs"] button[data-baseweb="tab"] { 
     background-color: #121824 !important; 
     border: 1.5px solid #23304A !important; 
@@ -70,24 +60,32 @@ div[data-testid="stExpander"] summary {
     margin-right: 4px !important; 
 } 
 
-/* 3. Selected/Active Tab Layout */
+/* 2. Selected/Active Tab */
 [data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] { 
     background-color: #1E293B !important; 
     border: 2px solid #00E676 !important; 
     box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important; 
 }
 
-/* 4. Total Text Color Enforcement (Forces black across all states) */
-[data-testid="stTabs"] button[data-baseweb="tab"] *,
+/* 3. ABSOLUTE TEXT BLACK ENFORCEMENT */
+/* This targets raw internal elements directly to force black text everywhere */
 [data-testid="stTabs"] button[data-baseweb="tab"] p,
 [data-testid="stTabs"] button[data-baseweb="tab"] span,
-[data-testid="stTabs"] button[data-baseweb="tab"]:hover * { 
+[data-testid="stTabs"] button[data-baseweb="tab"] div,
+[data-testid="stTabs"] button[data-baseweb="tab"] h1,
+[data-testid="stTabs"] button[data-baseweb="tab"] h2,
+[data-testid="stTabs"] button[data-baseweb="tab"] h3,
+[data-testid="stTabs"] button[data-baseweb="tab"] .stMarkdown p,
+[data-testid="stTabs"] button[data-baseweb="tab"]:hover p,
+[data-testid="stTabs"] button[data-baseweb="tab"]:hover span,
+[data-testid="stTabs"] button[data-baseweb="tab"]:hover div {
     color: #000000 !important; 
-    -webkit-text-fill-color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important; /* Overrides internal webkit rendering */
     font-size: 0.90rem !important; 
     font-weight: 800 !important; 
     opacity: 1 !important; 
-} 
+}
+
 
 
 

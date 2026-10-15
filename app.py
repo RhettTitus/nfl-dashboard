@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timedelta
 import altair as alt
 from openpyxl import load_workbook
+import pytZ
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
@@ -323,7 +324,7 @@ def get_or_calculate_book_prob(book_prob_raw, odds_raw):
     return None
 
 # --------------------------------------------------------------------------
-# SIDEBAR NAVIGATION
+# SIDEBAR NAVIGATION & TOP QUICK-NAV BUTTONS
 # --------------------------------------------------------------------------
 st.sidebar.title("🏈 NFL Quant Engine")
 file_names = [x["filename"] for x in dated_files]
@@ -339,7 +340,6 @@ def get_file_imported_time(f_path):
         wb_meta = load_workbook(f_path, read_only=True)
         created_dt = wb_meta.properties.created or wb_meta.properties.modified
         if created_dt:
-            # Shift UTC to EST if needed
             est_dt = created_dt - timedelta(hours=4) if created_dt.tzinfo is None else created_dt.astimezone(pytz.timezone("US/Eastern"))
             return est_dt.strftime("%b %-d, %-I:%M %p EST")
     except:
@@ -349,11 +349,34 @@ def get_file_imported_time(f_path):
 
 file_imported_str = get_file_imported_time(file_path)
 
-# HEADER WITH STACKED 2-LINE TIMESTAMP BADGE
+screens_dict = {
+    "📊 Pro Visualizer: Over / Under": "Over / Under",
+    "⚡ Pro Visualizer: Alt Lines": "Alt Lines",
+    "💎 Best of the Best (Top Edges)": "Top Edges",
+    "📋 Master EV Tables": "EV Tables"
+}
+
+app_mode = st.sidebar.radio("📱 Screen:", list(screens_dict.keys()))
+
 def render_screen_header(title_text):
+    # TOP QUICK-NAV BUTTON BAR (EXCLUDES CURRENT PAGE)
+    other_screens = [k for k in screens_dict.keys() if k != app_mode]
+    nav_cols = st.columns(len(other_screens) + 1)
+    for idx, s_key in enumerate(other_screens):
+        with nav_cols[idx]:
+            if st.button(f"📌 {screens_dict[s_key]}", key=f"nav_btn_{s_key}"):
+                st.session_state["nav_override"] = s_key
+                st.rerun()
+
+    if "nav_override" in st.session_state and st.session_state["nav_override"] != app_mode:
+        target = st.session_state["nav_override"]
+        del st.session_state["nav_override"]
+        st.query_params["screen"] = target
+        st.rerun()
+
     h_col1, h_col2 = st.columns([3, 1])
     with h_col1:
-        st.markdown(f"<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>{title_text}</h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px; margin-top:8px;'>{title_text}</h1>", unsafe_allow_html=True)
     with h_col2:
         st.markdown(
             f"<div style='text-align:right; margin-top:8px;'>"
@@ -364,16 +387,6 @@ def render_screen_header(title_text):
             f"</div>",
             unsafe_allow_html=True
         )
-
-app_mode = st.sidebar.radio(
-    "📱 Screen:", 
-    [
-        "📊 Pro Visualizer: Over / Under",
-        "⚡ Pro Visualizer: Alt Lines",
-        "💎 Best of the Best (Top Edges)",
-        "📋 Master EV Tables"
-    ]
-)
 
 excel_data = pd.ExcelFile(file_path)
 
@@ -486,7 +499,7 @@ def render_props_cash_chart(row, last_5_raw):
         height=140, width=320
     ).configure(background="transparent").configure_view(strokeWidth=0)
 
-# SINGLE PROPS.CASH BOOK CARD (HEAD-TO-HEAD DISPLAY WITH REAL ALT ODDS)
+# SINGLE PROPS.CASH BOOK CARD
 def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk_key, is_alt_mode=False):
     book_html = get_book_styled(r["Book"])
     star_badge = get_best_line_badge_html(r.get("Line_Adv_Note", ""))
@@ -520,7 +533,6 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     margin_arrow = "▲" if is_pos else "▼"
     margin_color = "#00E676" if is_pos else "#FF3B30"
 
-    # PARLAY LIKELIHOOD: >= 50% IS GREEN (FAVORED TO HIT), < 50% IS RED (UNDERDOG)
     raw_bp = r.get("_raw_book_prob")
     try:
         val_clean = float(str(raw_bp).replace("%", "").strip())
@@ -530,7 +542,6 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
 
     b_prob_color = "#00E676" if norm_bp >= 0.50 else "#FF3B30"
 
-    # MODEL WIN PROB: >= 50% IS GREEN, < 50% IS RED
     raw_mp = r.get("Win Prob")
     try:
         val_clean_m = float(str(raw_mp).replace("%", "").strip())
@@ -1013,7 +1024,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                         st.caption(f"Win Prob: <b style='color:{m_color_prob};'>{model_prob}</b> (Book: <b style='color:{b_color};'>{book_prob}</b>)", unsafe_allow_html=True)
 
 # ==============================================================================
-# SCREEN 4: MASTER EV TABLES (RESTORED WITH ACTIVE TABS & DETAILED FILTERS)
+# SCREEN 4: MASTER EV TABLES
 # ==============================================================================
 elif app_mode == "📋 Master EV Tables":
     render_screen_header("📋 Master EV Tables & Projections")

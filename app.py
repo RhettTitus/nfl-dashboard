@@ -81,11 +81,11 @@ h1, h2, h3, h4, h5, h6 {
 div[data-baseweb="select"] > div {
     background-color: #121824 !important;
     border: 1.5px solid #23304A !important;
-    color: #FFFFFF !important;
+    color: #000000 !important;
     border-radius: 10px !important;
 }
 div[data-baseweb="select"] * {
-    color: #FFFFFF !important;
+    color: #000000 !important;
     font-weight: 700 !important;
 }
 div[data-baseweb="popover"] {

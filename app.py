@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import altair as alt
 from openpyxl import load_workbook
 
@@ -97,8 +97,8 @@ div[data-testid="stCheckbox"] {
     background: #111827 !important;
     border: 1.5px solid #243048 !important;
     border-top: none !important;
-    border-bottom-left-radius: 12px !important;
-    border-bottom-right-radius: 12px !important;
+    border-bottom-left-radius: 14px !important;
+    border-bottom-right-radius: 14px !important;
     padding: 8px 16px !important;
     margin-top: -6px !important;
     margin-bottom: 16px !important;
@@ -330,7 +330,7 @@ file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate:", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
-# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP
+# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP (STANDARD LIBRARY SAFE)
 @st.cache_data(ttl=60)
 def get_file_imported_time(f_path):
     if not os.path.exists(f_path):
@@ -339,6 +339,7 @@ def get_file_imported_time(f_path):
         wb_meta = load_workbook(f_path, read_only=True)
         created_dt = wb_meta.properties.created or wb_meta.properties.modified
         if created_dt:
+            # Shift UTC to EST standard offset (-4h)
             est_dt = created_dt - timedelta(hours=4)
             return est_dt.strftime("%b %-d, %-I:%M %p EST")
     except:
@@ -355,48 +356,26 @@ screens_dict = {
     "📋 Master EV Tables": "EV Tables"
 }
 
-# PERSISTENT NAVIGATION STATE VIA QUERY PARAMS
-query_screen = st.query_params.get("screen")
-if query_screen and query_screen in screens_dict:
-    st.session_state["app_mode"] = query_screen
-    st.query_params.clear()
-
-if "app_mode" not in st.session_state:
-    st.session_state["app_mode"] = list(screens_dict.keys())[0]
-
-app_mode = st.sidebar.radio("📱 Screen:", list(screens_dict.keys()), index=list(screens_dict.keys()).index(st.session_state["app_mode"]))
-st.session_state["app_mode"] = app_mode
+app_mode = st.sidebar.radio("📱 Screen:", list(screens_dict.keys()))
 
 def render_screen_header(title_text):
     other_screens = [k for k in screens_dict.keys() if k != app_mode]
-    
-    nav_html = '<div style="display:flex; justify-content:space-between; align-items:center; width:100%; gap:12px; margin-bottom:18px;">'
-    for s_key in other_screens:
-        screen_label = screens_dict[s_key]
-        nav_html += f'''
-            <form action="" method="get" style="flex:1; margin:0;">
-                <input type="hidden" name="screen" value="{s_key}">
-                <button type="submit" style="
-                    width: 100%;
-                    background-color: #151D2A;
-                    border: 1.5px solid #2B3A52;
-                    color: #FFFFFF;
-                    padding: 10px 16px;
-                    border-radius: 12px;
-                    font-weight: 800;
-                    font-size: 0.9rem;
-                    cursor: pointer;
-                    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-                    letter-spacing: 0.3px;
-                ">📌 Go to {screen_label}</button>
-            </form>
-        '''
-    nav_html += '</div>'
-    st.markdown(nav_html, unsafe_allow_html=True)
+    nav_cols = st.columns(len(other_screens) + 1)
+    for idx, s_key in enumerate(other_screens):
+        with nav_cols[idx]:
+            if st.button(f"📌 {screens_dict[s_key]}", key=f"nav_btn_{s_key}"):
+                st.session_state["nav_override"] = s_key
+                st.rerun()
+
+    if "nav_override" in st.session_state and st.session_state["nav_override"] != app_mode:
+        target = st.session_state["nav_override"]
+        del st.session_state["nav_override"]
+        st.query_params["screen"] = target
+        st.rerun()
 
     h_col1, h_col2 = st.columns([3, 1])
     with h_col1:
-        st.markdown(f"<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>{title_text}</h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px; margin-top:8px;'>{title_text}</h1>", unsafe_allow_html=True)
     with h_col2:
         st.markdown(
             f"<div style='text-align:right; margin-top:8px;'>"
@@ -519,7 +498,7 @@ def render_props_cash_chart(row, last_5_raw):
         height=140, width=320
     ).configure(background="transparent").configure_view(strokeWidth=0)
 
-# SINGLE PROPS.CASH BOOK CARD
+# SINGLE PROPS.CASH BOOK CARD (HEAD-TO-HEAD DISPLAY WITH REAL ALT ODDS)
 def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk_key, is_alt_mode=False):
     book_html = get_book_styled(r["Book"])
     star_badge = get_best_line_badge_html(r.get("Line_Adv_Note", ""))

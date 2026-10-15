@@ -419,7 +419,7 @@ def render_props_cash_chart(row, last_5_raw):
         height=140, width=320
     ).configure(background="transparent").configure_view(strokeWidth=0)
 
-# SINGLE PROPS.CASH BOOK CARD (HEAD-TO-HEAD DISPLAY WITH REAL ALT ODDS)
+# SINGLE PROPS.CASH BOOK CARD (ACCURATE DYNAMIC PROBABILITIES)
 def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk_key, is_alt_mode=False):
     book_html = get_book_styled(r["Book"])
     star_badge = get_best_line_badge_html(r.get("Line_Adv_Note", ""))
@@ -453,15 +453,24 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     margin_arrow = "▲" if is_pos else "▼"
     margin_color = "#00E676" if is_pos else "#FF3B30"
 
-    # PARLAY LIKELIHOOD: >= 50% IS GREEN (FAVORED TO HIT), < 50% IS RED (UNDERDOG)
+    # PARLAY LIKELIHOOD COLORING:
+    # Book Win Prob: >= 50% Green (Favored), < 50% Red (Underdog)
     raw_bp = r.get("_raw_book_prob")
     try:
-        val_clean = float(str(raw_bp).replace("%", "").strip())
-        norm_bp = val_clean if val_clean <= 1.0 else val_clean / 100.0
+        val_clean_b = float(str(raw_bp).replace("%", "").strip())
+        norm_bp = val_clean_b if val_clean_b <= 1.0 else val_clean_b / 100.0
     except:
         norm_bp = 0.50
-
     b_prob_color = "#00E676" if norm_bp >= 0.50 else "#FF3B30"
+
+    # Model Win Prob: >= 50% Green (Favored by Model), < 50% Red (Underdog)
+    raw_mp = r.get("Win Prob")
+    try:
+        val_clean_m = float(str(raw_mp).replace("%", "").strip())
+        norm_mp = val_clean_m if val_clean_m <= 1.0 else val_clean_m / 100.0
+    except:
+        norm_mp = 0.50
+    m_prob_color = "#00E676" if norm_mp >= 0.50 else "#FF3B30"
 
     hist_sig = str(r.get("History Signal", "-")).strip()
     hist_badge = ""
@@ -475,8 +484,11 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     if "DUAL CONFIRMED" in live_sig:
         live_badge = '<span style="background:#8B5CF620; color:#A78BFA; border:1px solid #8B5CF6; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:800; margin-left:6px;">⚡ DUAL CONFIRMED</span>'
 
-    odds_str = f"({r['Odds']})" if r['Odds'] != "-" else ""
-    prob_delta_str = f"({r['Prob Delta']})" if r['Prob Delta'] else ""
+    odds_raw_val = r.get("Odds", "-")
+    if odds_raw_val in ["-", "", "nan", "None"]:
+        odds_str = "<span style='font-size:0.85rem; color:#94A3B8; font-weight:600;'>(Unposted Line)</span>"
+    else:
+        odds_str = f"<span style='font-size:0.92rem; font-weight:600; color:#94A3B8;'>({odds_raw_val})</span>"
 
     line_display_clean = r.get("Clean_Display_Line", "")
 
@@ -508,7 +520,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
         f'</div>'
         f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">'
         f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">HIT RATE</div><div style="font-size:15px; font-weight:900; color:{hit_rate_color};">{hit_rate_display}</div></div>'
-        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MODEL WIN</div><div style="font-size:15px; font-weight:900; color:#00E676;">{r["Win Prob"]}</div></div>'
+        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MODEL WIN</div><div style="font-size:15px; font-weight:900; color:{m_prob_color};">{r["Win Prob"]}</div></div>'
         f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">BOOK WIN</div><div style="font-size:15px; font-weight:900; color:{b_prob_color};">{r["Book Win Prob"]}</div></div>'
         f'</div>'
         f'</div>'
@@ -523,7 +535,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     card_bot_html = (
         f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-top:none; padding:10px 18px 14px 18px; border-bottom-left-radius:14px; border-bottom-right-radius:14px;">'
         f'<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">'
-        f'<span style="font-size:1.15rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{line_display_clean} <span style="font-size:0.92rem; font-weight:600; color:#94A3B8;">{odds_str}</span></span>'
+        f'<span style="font-size:1.15rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{line_display_clean} {odds_str}</span>'
         f'<span style="font-size:1.20rem; font-weight:900; color:#00E676; letter-spacing:0.3px;">{r["EV"]} EV</span>'
         f'</div>'
         f'</div>'
@@ -572,7 +584,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
 
     prop_rows = []
     for _, r in filtered_df.iterrows():
-        # SKIP UNPOSTED ALT PROPS (DASH ODDS)
         if is_alt_mode:
             odds_check = str(r.get("Odds", "-")).strip()
             if odds_check in ["-", "", "nan", "None"]:

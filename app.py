@@ -35,12 +35,12 @@ div[data-testid="stExpander"] summary {
 
 /* STREAMLIT TABS (WORKS CLEANLY ACROSS ALL SCREENS) */
 [data-testid="stTabs"] {
-    background-color: transparent !important;
+    background-color: #121824 !important;
 }
 [data-testid="stTabs"] div[data-baseweb="tab-list"] {
     gap: 8px !important;
     border-bottom: 2px solid #1E283D !important;
-    background-color: transparent !important;
+    background-color: 121824 !important;
     padding-bottom: 4px !important;
     margin-bottom: 12px !important;
 }

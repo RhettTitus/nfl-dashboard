@@ -33,7 +33,11 @@ div[data-testid="stExpander"] summary {
     padding: 10px 16px !important;
 }
 
-/* STREAMLIT TABS (WORKS CLEANLY ACROSS ALL SCREENS) */ 
+/* ============================================================================== */
+/* STREAMLIT TABS (WORKS CLEANLY ACROSS ALL SCREENS)                              */
+/* ============================================================================== */
+
+/* Base Container Styling */
 [data-testid="stTabs"] { 
     background-color: #121824 !important; 
 } 
@@ -51,36 +55,9 @@ div[data-testid="stExpander"] summary {
     display: none !important; 
 } 
 
-/* 1. Unselected Tabs (Changes background to dark so text is visible) */
-[data-testid="stTabs"] button[data-baseweb="tab"] { 
-    background-color: #121824 !important; /* Force a dark background instead of Streamlit white */
-    border: 1.5px solid #23304A !important; 
-    border-radius: 12px !important; 
-    padding: 6px 16px !important; 
-    margin-right: 4px !important; 
-} 
-
-/* Forces the inner text and icons inside unselected tabs to be black */
-[data-testid="stTabs"] button[data-baseweb="tab"] * { 
-    color: #000000 !important; 
-    font-size: 0.90rem !important; 
-    font-weight: 800 !important; 
-    opacity: 1 !important; 
-} 
- 
-
-/* 2. Selected/Active Tab */
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * { 
-    color: #000000 !important; 
-}
-
-/* 3. Hover State Override */
-[data-testid="stTabs"] button[data-baseweb="tab"]:hover * {
-    color: #000000 !important;
-}
-
-/* Optional: Main button layout */
-[data-testid="stTabs"] button[data-baseweb="tab"] { 
+/* 1. Unselected Tab Base Styling (Forces your dark color over Streamlit's white) */
+[data-testid="stTabs"] button[data-baseweb="tab"],
+[data-testid="stTabs"] button[data-baseweb="tab"] div div { 
     background-color: #121824 !important; 
     border: 1.5px solid #23304A !important; 
     border-radius: 12px !important; 
@@ -88,11 +65,26 @@ div[data-testid="stExpander"] summary {
     margin-right: 4px !important; 
 } 
 
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] { 
+/* 2. Selected/Active Tab State */
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"],
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] div div { 
     background-color: #1E293B !important; 
     border: 2px solid #00E676 !important; 
     box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important; 
 }
+
+/* 3. Text & Emoji Enforcement Block (Keeps text black across normal, active, and hover) */
+[data-testid="stTabs"] button[data-baseweb="tab"] *,
+[data-testid="stTabs"] button[data-baseweb="tab"] p,
+[data-testid="stTabs"] button[data-baseweb="tab"] span,
+[data-testid="stTabs"] button[data-baseweb="tab"]:hover * {
+    color: #000000 !important; 
+    -webkit-text-fill-color: #000000 !important;
+    font-size: 0.90rem !important; 
+    font-weight: 800 !important; 
+    opacity: 1 !important; 
+} 
+
 
 
 /* Crisp Headings */

@@ -97,8 +97,8 @@ div[data-testid="stCheckbox"] {
     background: #111827 !important;
     border: 1.5px solid #243048 !important;
     border-top: none !important;
-    border-bottom-left-radius: 14px !important;
-    border-bottom-right-radius: 14px !important;
+    border-bottom-left-radius: 12px !important;
+    border-bottom-right-radius: 12px !important;
     padding: 8px 16px !important;
     margin-top: -6px !important;
     margin-bottom: 16px !important;
@@ -330,7 +330,7 @@ file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate:", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
-# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP (STANDARD LIBRARY SAFE)
+# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP
 @st.cache_data(ttl=60)
 def get_file_imported_time(f_path):
     if not os.path.exists(f_path):
@@ -355,7 +355,12 @@ screens_dict = {
     "📋 Master EV Tables": "EV Tables"
 }
 
-# PERSISTENT NAVIGATION STATE
+# PERSISTENT NAVIGATION STATE VIA QUERY PARAMS
+query_screen = st.query_params.get("screen")
+if query_screen and query_screen in screens_dict:
+    st.session_state["app_mode"] = query_screen
+    st.query_params.clear()
+
 if "app_mode" not in st.session_state:
     st.session_state["app_mode"] = list(screens_dict.keys())[0]
 
@@ -388,12 +393,6 @@ def render_screen_header(title_text):
         '''
     nav_html += '</div>'
     st.markdown(nav_html, unsafe_allow_html=True)
-
-    query_screen = st.query_params.get("screen")
-    if query_screen and query_screen in screens_dict and query_screen != app_mode:
-        st.session_state["app_mode"] = query_screen
-        st.query_params.clear()
-        st.rerun()
 
     h_col1, h_col2 = st.columns([3, 1])
     with h_col1:

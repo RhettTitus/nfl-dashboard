@@ -4,7 +4,6 @@ import os
 import re
 from datetime import datetime, timedelta
 import altair as alt
-from openpyxl import load_workbook
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
@@ -19,6 +18,12 @@ html, body, [class*="css"], .stApp {
     color: #F8FAFC !important;
 }
 
+/* KILLS RESIDUAL TABS BUT PRESERVES GAMBLY EXPANDER */
+div[data-baseweb="tab-list"],
+div[data-testid="stTabs"] {
+    display: none !important;
+}
+
 /* STYLES THE GAMBLY EXPANDER TO LOOK SLEEK AND INTENTIONAL */
 div[data-testid="stExpander"] {
     background-color: #0C111C !important;
@@ -31,43 +36,6 @@ div[data-testid="stExpander"] summary {
     font-weight: 800 !important;
     color: #FFFFFF !important;
     padding: 10px 16px !important;
-}
-
-/* STREAMLIT TABS (WORKS CLEANLY ACROSS ALL SCREENS) */
-[data-testid="stTabs"] {
-    background-color: transparent !important;
-}
-[data-testid="stTabs"] div[data-baseweb="tab-list"] {
-    gap: 8px !important;
-    border-bottom: 2px solid #1E283D !important;
-    background-color: transparent !important;
-    padding-bottom: 4px !important;
-    margin-bottom: 12px !important;
-}
-[data-testid="stTabs"] div[data-baseweb="tab-highlight"],
-[data-testid="stTabs"] div[data-baseweb="tab-border"] {
-    display: none !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"] {
-    background-color: #121824 !important;
-    border: 1.5px solid #23304A !important;
-    border-radius: 12px !important;
-    padding: 6px 16px !important;
-    margin-right: 4px !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"] * {
-    color: #FFFFFF !important;
-    font-size: 0.90rem !important;
-    font-weight: 800 !important;
-    opacity: 1 !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
-    background-color: #1E293B !important;
-    border: 2px solid #00E676 !important;
-    box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important;
-}
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
-    color: #00E676 !important;
 }
 
 /* Crisp Headings */
@@ -330,41 +298,6 @@ file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate:", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
-# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP
-@st.cache_data(ttl=60)
-def get_file_imported_time(f_path):
-    if not os.path.exists(f_path):
-        return "Recently"
-    try:
-        wb_meta = load_workbook(f_path, read_only=True)
-        created_dt = wb_meta.properties.created or wb_meta.properties.modified
-        if created_dt:
-            # Shift UTC to EST if needed
-            est_dt = created_dt - timedelta(hours=4) if created_dt.tzinfo is None else created_dt.astimezone(pytz.timezone("US/Eastern"))
-            return est_dt.strftime("%b %-d, %-I:%M %p EST")
-    except:
-        pass
-    mtime = os.path.getmtime(f_path)
-    return datetime.fromtimestamp(mtime).strftime("%b %-d, %-I:%M %p EST")
-
-file_imported_str = get_file_imported_time(file_path)
-
-# HEADER WITH STACKED 2-LINE TIMESTAMP BADGE
-def render_screen_header(title_text):
-    h_col1, h_col2 = st.columns([3, 1])
-    with h_col1:
-        st.markdown(f"<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>{title_text}</h1>", unsafe_allow_html=True)
-    with h_col2:
-        st.markdown(
-            f"<div style='text-align:right; margin-top:8px;'>"
-            f"<div style='background:#121824; border:1px solid #23304A; border-radius:10px; padding:6px 12px; display:inline-block; text-align:right;'>"
-            f"<div style='color:#94A3B8; font-size:10.5px; font-weight:800; letter-spacing:0.5px; text-transform:uppercase;'>Last Updated</div>"
-            f"<div style='color:#FFFFFF; font-size:12.5px; font-weight:800; margin-top:1px;'>{file_imported_str}</div>"
-            f"</div>"
-            f"</div>",
-            unsafe_allow_html=True
-        )
-
 app_mode = st.sidebar.radio(
     "📱 Screen:", 
     [
@@ -551,6 +484,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     if "DUAL CONFIRMED" in live_sig:
         live_badge = '<span style="background:#8B5CF620; color:#A78BFA; border:1px solid #8B5CF6; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:800; margin-left:6px;">⚡ DUAL CONFIRMED</span>'
 
+    # CLEAR ODDS TAGGING
     odds_raw_val = r.get("Odds", "-")
     if odds_raw_val in ["-", "", "nan", "None"]:
         odds_str = "<span style='font-size:0.85rem; color:#94A3B8; font-weight:600;'>(Unposted Line)</span>"
@@ -842,7 +776,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
 # SCREEN 1: PRO VISUALIZER (OVER / UNDER)
 # ==============================================================================
 if app_mode == "📊 Pro Visualizer: Over / Under":
-    render_screen_header("📊 Pro Visualizer: Over / Under")
+    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>📊 Pro Visualizer: Over / Under</h1>", unsafe_allow_html=True)
     ou_df = load_visualizer_data(["Top DK OU", "Top FD OU"])
     if ou_df.empty:
         st.warning("No Over/Under props found in this workbook.")
@@ -853,7 +787,7 @@ if app_mode == "📊 Pro Visualizer: Over / Under":
 # SCREEN 2: PRO VISUALIZER (ALT LINES)
 # ==============================================================================
 elif app_mode == "⚡ Pro Visualizer: Alt Lines":
-    render_screen_header("⚡ Pro Visualizer: Alt Lines")
+    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>⚡ Pro Visualizer: Alt Lines</h1>", unsafe_allow_html=True)
     alt_df = load_visualizer_data(["Top DK Alt Lines", "Top FD Alt Lines"])
     if alt_df.empty:
         st.warning("No Alt Line props found in this workbook.")
@@ -864,7 +798,7 @@ elif app_mode == "⚡ Pro Visualizer: Alt Lines":
 # SCREEN 3: BEST OF THE BEST (SKIP UNPOSTED ALT PROPS & PROBABILITY COLOR CODED)
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
-    render_screen_header("💎 Best of the Best (Top Conviction Plays)")
+    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>💎 Best of the Best (Top Conviction Plays)</h1>", unsafe_allow_html=True)
     all_curated = load_visualizer_data(["Top DK OU", "Top FD OU", "Top DK Alt Lines", "Top FD Alt Lines"])
     
     if all_curated.empty:
@@ -872,6 +806,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
     else:
         sanitized_plays = []
         for _, r_cand in all_curated.iterrows():
+            # SKIP ANY UNPOSTED PROPS WITH DASH ODDS
             odds_str_check = str(r_cand.get("Odds", "-")).strip()
             if odds_str_check in ["-", "", "nan", "None"]:
                 continue
@@ -982,6 +917,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 calc_bp_best = get_or_calculate_book_prob(row.get("Book Win Prob"), row.get("Odds"))
                 book_prob = format_percentage(calc_bp_best) if calc_bp_best is not None else "-"
                 
+                # COLOR CODE WIN PROBABILITIES IN SCREEN 3
                 b_color = "#00E676" if (calc_bp_best is not None and calc_bp_best >= 0.50) else "#FF3B30"
                 m_color_prob = "#00E676" if row.get("_model_prob", 0.5) >= 0.50 else "#FF3B30"
 
@@ -1013,10 +949,10 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                         st.caption(f"Win Prob: <b style='color:{m_color_prob};'>{model_prob}</b> (Book: <b style='color:{b_color};'>{book_prob}</b>)", unsafe_allow_html=True)
 
 # ==============================================================================
-# SCREEN 4: MASTER EV TABLES (RESTORED WITH ACTIVE TABS & DETAILED FILTERS)
+# SCREEN 4: MASTER EV TABLES
 # ==============================================================================
 elif app_mode == "📋 Master EV Tables":
-    render_screen_header("📋 Master EV Tables & Projections")
+    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>📋 Master EV Tables & Projections</h1>", unsafe_allow_html=True)
 
     tab_names = [s for s in excel_data.sheet_names if s != "How To Use"]
     tabs = st.tabs(tab_names)

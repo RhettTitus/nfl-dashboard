@@ -339,6 +339,7 @@ def get_file_imported_time(f_path):
         wb_meta = load_workbook(f_path, read_only=True)
         created_dt = wb_meta.properties.created or wb_meta.properties.modified
         if created_dt:
+            # Shift UTC to EST if needed
             est_dt = created_dt - timedelta(hours=4) if created_dt.tzinfo is None else created_dt.astimezone(pytz.timezone("US/Eastern"))
             return est_dt.strftime("%b %-d, %-I:%M %p EST")
     except:
@@ -348,6 +349,7 @@ def get_file_imported_time(f_path):
 
 file_imported_str = get_file_imported_time(file_path)
 
+# HEADER WITH STACKED 2-LINE TIMESTAMP BADGE
 def render_screen_header(title_text):
     h_col1, h_col2 = st.columns([3, 1])
     with h_col1:
@@ -484,7 +486,7 @@ def render_props_cash_chart(row, last_5_raw):
         height=140, width=320
     ).configure(background="transparent").configure_view(strokeWidth=0)
 
-# SINGLE PROPS.CASH BOOK CARD
+# SINGLE PROPS.CASH BOOK CARD (HEAD-TO-HEAD DISPLAY WITH REAL ALT ODDS)
 def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk_key, is_alt_mode=False):
     book_html = get_book_styled(r["Book"])
     star_badge = get_best_line_badge_html(r.get("Line_Adv_Note", ""))
@@ -557,12 +559,6 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
 
     line_display_clean = r.get("Clean_Display_Line", "")
 
-    # RESOLVE FULL BET STRING (e.g. Over 17.5 Rec Yds vs 75+ Rec Yds)
-    if "+" in line_display_clean:
-        full_pick_string = line_display_clean
-    else:
-        full_pick_string = f"{r['Pick']} {format_clean_decimal(r['Vegas Line'])} {line_display_clean}"
-
     card_top_html = (
         f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-top-left-radius:14px; border-top-right-radius:14px; padding:16px 18px; border-bottom:none;">'
         f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">'
@@ -606,7 +602,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     card_bot_html = (
         f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-top:none; padding:10px 18px 14px 18px; border-bottom-left-radius:14px; border-bottom-right-radius:14px;">'
         f'<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">'
-        f'<span style="font-size:1.15rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{full_pick_string} <span style="font-size:0.92rem; font-weight:600; color:#94A3B8;">{odds_str}</span></span>'
+        f'<span style="font-size:1.15rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{line_display_clean} {odds_str}</span>'
         f'<span style="font-size:1.20rem; font-weight:900; color:#00E676; letter-spacing:0.3px;">{r["EV"]} EV</span>'
         f'</div>'
         f'</div>'
@@ -769,13 +765,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
     for _, r_check in props_df.iterrows():
         chk_id = f"chk_{r_check['Player']}_{r_check['Book']}_{r_check['Prop Name']}_{format_clean_decimal(r_check['Vegas Line'])}_{is_alt_mode}"
         if st.session_state.get(chk_id, False):
-            # Properly format the Gambly slip based on alt vs standard lines
-            line_display_clean = r_check.get("Clean_Display_Line", "")
-            if "+" in line_display_clean:
-                bet_line = f"{r_check['Player']} {line_display_clean}"
-            else:
-                bet_line = format_gambly_bet_string(r_check['Player'], r_check['Pick'], r_check['Vegas Line'], r_check['Clean_Display_Line'])
-            
+            bet_line = format_gambly_bet_string(r_check['Player'], r_check['Pick'], r_check['Vegas Line'], r_check['Clean_Display_Line'])
             if r_check['Book'] == 'DraftKings': selected_dk_bets.append(bet_line)
             elif r_check['Book'] == 'FanDuel': selected_fd_bets.append(bet_line)
 
@@ -871,7 +861,7 @@ elif app_mode == "⚡ Pro Visualizer: Alt Lines":
         render_prop_visualizer(alt_df, is_alt_mode=True)
 
 # ==============================================================================
-# SCREEN 3: BEST OF THE BEST
+# SCREEN 3: BEST OF THE BEST (SKIP UNPOSTED ALT PROPS & PROBABILITY COLOR CODED)
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
     render_screen_header("💎 Best of the Best (Top Conviction Plays)")
@@ -979,7 +969,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 p_name = row["Player"]
                 prop_n = row["Clean_Prop"]
                 line_display = format_clean_decimal(row["Clean_Line"])
-                clean_disp = row.get("Clean_Display_Line", prop_n)
+                display_label = row.get("Clean_Display_Line", f"{line_display} {prop_n}")
                 book_s = get_book_styled(row["Book"])
                 headshot_url = get_headshot_url(p_name)
 
@@ -1006,11 +996,6 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 m_bg = "#00E67610" if is_pos else "#FF3B3010"
                 m_border = "#00E67680" if is_pos else "#FF3B3080"
 
-                if "+" in clean_disp:
-                    full_pick_string = clean_disp
-                else:
-                    full_pick_string = f"{side_clean} {line_display} {clean_disp}"
-
                 with st.container(border=True):
                     c1, c2, c3, c4 = st.columns([1, 4, 3, 3])
                     with c1:
@@ -1021,14 +1006,14 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                         st.markdown(f"📌 {prop_n} [{book_s}]", unsafe_allow_html=True)
                         st.caption(f"Action: `{row.get('Action', 'STRONG BET')}`")
                     with c3:
-                        st.markdown(f"<div style='font-size:1.10rem; font-weight:800; color:#FFFFFF;'>{full_pick_string} <span style='color:#94A3B8; font-weight:600;'>{odds_str}</span></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size:1.10rem; font-weight:800; color:#FFFFFF;'>{display_label} <span style='color:#94A3B8; font-weight:600;'>{odds_str}</span></div>", unsafe_allow_html=True)
                         st.markdown(f"<span style='font-size:12.5px; font-weight:800; color:{m_color}; background:{m_bg}; padding:3px 8px; border-radius:5px; border:1px solid {m_border};'>Margin: {margin_val:+0.1f}</span>", unsafe_allow_html=True)
                     with c4:
                         st.markdown(f"<div style='font-size:1.25rem; font-weight:800; color:#00E676;'>{ev_clean} EV</div>", unsafe_allow_html=True)
                         st.caption(f"Win Prob: <b style='color:{m_color_prob};'>{model_prob}</b> (Book: <b style='color:{b_color};'>{book_prob}</b>)", unsafe_allow_html=True)
 
 # ==============================================================================
-# SCREEN 4: MASTER EV TABLES
+# SCREEN 4: MASTER EV TABLES (RESTORED WITH ACTIVE TABS & DETAILED FILTERS)
 # ==============================================================================
 elif app_mode == "📋 Master EV Tables":
     render_screen_header("📋 Master EV Tables & Projections")

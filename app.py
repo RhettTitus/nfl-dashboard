@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 import altair as alt
 from openpyxl import load_workbook
 
@@ -33,55 +33,42 @@ div[data-testid="stExpander"] summary {
     padding: 10px 16px !important;
 }
 
-/* STREAMLIT TABS (WORKS CLEANLY ACROSS ALL SCREENS) */ 
-[data-testid="stTabs"] { 
-    background-color: #121824 !important; 
-} 
-
-[data-testid="stTabs"] div[data-baseweb="tab-list"] { 
-    gap: 8px !important; 
-    border-bottom: 2px solid #1E283D !important; 
-    background-color: #121824 !important; 
-    padding-bottom: 4px !important; 
-    margin-bottom: 12px !important; 
-} 
-
-[data-testid="stTabs"] div[data-baseweb="tab-highlight"], 
-[data-testid="stTabs"] div[data-baseweb="tab-border"] { 
-    display: none !important; 
-} 
-
-/* 1. Unselected Tabs */
-[data-testid="stTabs"] button[data-baseweb="tab"] { 
-    background-color: #121824 !important; 
-    border: 1.5px solid #23304A !important; 
-    border-radius: 12px !important; 
-    padding: 6px 16px !important; 
-    margin-right: 4px !important; 
-} 
-
-/* 2. Selected/Active Tab */
-[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] { 
-    background-color: #1E293B !important; 
-    border: 2px solid #00E676 !important; 
-    box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important; 
+/* STREAMLIT TABS (WORKS CLEANLY ACROSS ALL SCREENS) */
+[data-testid="stTabs"] {
+    background-color: transparent !important;
 }
-
-/* 3. Global Text Color Enforcement */
-[data-testid="stTabs"] button[data-baseweb="tab"] *,
-[data-testid="stTabs"] button[data-baseweb="tab"]:hover * { 
-    color: #000000 !important; 
-    -webkit-text-fill-color: #000000 !important;
-    font-size: 0.90rem !important; 
-    font-weight: 800 !important; 
-    opacity: 1 !important; 
-} 
-
-
-
-
-
-
+[data-testid="stTabs"] div[data-baseweb="tab-list"] {
+    gap: 8px !important;
+    border-bottom: 2px solid #1E283D !important;
+    background-color: transparent !important;
+    padding-bottom: 4px !important;
+    margin-bottom: 12px !important;
+}
+[data-testid="stTabs"] div[data-baseweb="tab-highlight"],
+[data-testid="stTabs"] div[data-baseweb="tab-border"] {
+    display: none !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"] {
+    background-color: #121824 !important;
+    border: 1.5px solid #23304A !important;
+    border-radius: 12px !important;
+    padding: 6px 16px !important;
+    margin-right: 4px !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"] * {
+    color: #FFFFFF !important;
+    font-size: 0.90rem !important;
+    font-weight: 800 !important;
+    opacity: 1 !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
+    background-color: #1E293B !important;
+    border: 2px solid #00E676 !important;
+    box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
+    color: #00E676 !important;
+}
 
 /* Crisp Headings */
 h1, h2, h3, h4, h5, h6 {
@@ -94,11 +81,11 @@ h1, h2, h3, h4, h5, h6 {
 div[data-baseweb="select"] > div {
     background-color: #121824 !important;
     border: 1.5px solid #23304A !important;
-    color: #000000 !important;
+    color: #FFFFFF !important;
     border-radius: 10px !important;
 }
 div[data-baseweb="select"] * {
-    color: #000000 !important;
+    color: #FFFFFF !important;
     font-weight: 700 !important;
 }
 div[data-baseweb="popover"] {
@@ -343,7 +330,7 @@ file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate:", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
-# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP (STANDARD LIBRARY SAFE)
+# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP
 @st.cache_data(ttl=60)
 def get_file_imported_time(f_path):
     if not os.path.exists(f_path):
@@ -352,8 +339,8 @@ def get_file_imported_time(f_path):
         wb_meta = load_workbook(f_path, read_only=True)
         created_dt = wb_meta.properties.created or wb_meta.properties.modified
         if created_dt:
-            # Shift UTC to EST standard offset (-4h)
-            est_dt = created_dt - timedelta(hours=4)
+            # Shift UTC to EST if needed
+            est_dt = created_dt - timedelta(hours=4) if created_dt.tzinfo is None else created_dt.astimezone(pytz.timezone("US/Eastern"))
             return est_dt.strftime("%b %-d, %-I:%M %p EST")
     except:
         pass
@@ -362,33 +349,11 @@ def get_file_imported_time(f_path):
 
 file_imported_str = get_file_imported_time(file_path)
 
-screens_dict = {
-    "📊 Pro Visualizer: Over / Under": "Over / Under",
-    "⚡ Pro Visualizer: Alt Lines": "Alt Lines",
-    "💎 Best of the Best (Top Edges)": "Top Edges",
-    "📋 Master EV Tables": "EV Tables"
-}
-
-app_mode = st.sidebar.radio("📱 Screen:", list(screens_dict.keys()))
-
+# HEADER WITH STACKED 2-LINE TIMESTAMP BADGE
 def render_screen_header(title_text):
-    other_screens = [k for k in screens_dict.keys() if k != app_mode]
-    nav_cols = st.columns(len(other_screens) + 1)
-    for idx, s_key in enumerate(other_screens):
-        with nav_cols[idx]:
-            if st.button(f"📌 {screens_dict[s_key]}", key=f"nav_btn_{s_key}"):
-                st.session_state["nav_override"] = s_key
-                st.rerun()
-
-    if "nav_override" in st.session_state and st.session_state["nav_override"] != app_mode:
-        target = st.session_state["nav_override"]
-        del st.session_state["nav_override"]
-        st.query_params["screen"] = target
-        st.rerun()
-
     h_col1, h_col2 = st.columns([3, 1])
     with h_col1:
-        st.markdown(f"<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px; margin-top:8px;'>{title_text}</h1>", unsafe_allow_html=True)
+        st.markdown(f"<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>{title_text}</h1>", unsafe_allow_html=True)
     with h_col2:
         st.markdown(
             f"<div style='text-align:right; margin-top:8px;'>"
@@ -399,6 +364,16 @@ def render_screen_header(title_text):
             f"</div>",
             unsafe_allow_html=True
         )
+
+app_mode = st.sidebar.radio(
+    "📱 Screen:", 
+    [
+        "📊 Pro Visualizer: Over / Under",
+        "⚡ Pro Visualizer: Alt Lines",
+        "💎 Best of the Best (Top Edges)",
+        "📋 Master EV Tables"
+    ]
+)
 
 excel_data = pd.ExcelFile(file_path)
 
@@ -545,6 +520,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     margin_arrow = "▲" if is_pos else "▼"
     margin_color = "#00E676" if is_pos else "#FF3B30"
 
+    # PARLAY LIKELIHOOD: >= 50% IS GREEN (FAVORED TO HIT), < 50% IS RED (UNDERDOG)
     raw_bp = r.get("_raw_book_prob")
     try:
         val_clean = float(str(raw_bp).replace("%", "").strip())
@@ -554,6 +530,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
 
     b_prob_color = "#00E676" if norm_bp >= 0.50 else "#FF3B30"
 
+    # MODEL WIN PROB: >= 50% IS GREEN, < 50% IS RED
     raw_mp = r.get("Win Prob")
     try:
         val_clean_m = float(str(raw_mp).replace("%", "").strip())
@@ -1036,7 +1013,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                         st.caption(f"Win Prob: <b style='color:{m_color_prob};'>{model_prob}</b> (Book: <b style='color:{b_color};'>{book_prob}</b>)", unsafe_allow_html=True)
 
 # ==============================================================================
-# SCREEN 4: MASTER EV TABLES
+# SCREEN 4: MASTER EV TABLES (RESTORED WITH ACTIVE TABS & DETAILED FILTERS)
 # ==============================================================================
 elif app_mode == "📋 Master EV Tables":
     render_screen_header("📋 Master EV Tables & Projections")

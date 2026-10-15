@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timedelta
 import altair as alt
 from openpyxl import load_workbook
+import pytz
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
@@ -277,7 +278,7 @@ def extract_sanitized_prop_and_line(r):
         return pure_prop, line_f, display_label
 
     else:
-        if pd.isna(line_val) or str(line_val).strip().lower() not in ["nan", "none", "", "unposted"]:
+        if pd.isna(line_val) or str(line_val).strip().lower() in ["nan", "none", "", "unposted"]:
             return None, None, None
         try:
             line_f = float(line_val)
@@ -355,18 +356,24 @@ screens_dict = {
     "📋 Master EV Tables": "EV Tables"
 }
 
-app_mode = st.sidebar.radio("📱 Screen:", list(screens_dict.keys()))
+# PERSISTENT NAVIGATION STATE
+if "app_mode" not in st.session_state:
+    st.session_state["app_mode"] = list(screens_dict.keys())[0]
+
+app_mode = st.sidebar.radio("📱 Screen:", list(screens_dict.keys()), index=list(screens_dict.keys()).index(st.session_state["app_mode"]))
+st.session_state["app_mode"] = app_mode
 
 def render_screen_header(title_text):
-    # SPAN-WIDTH TOP NAVIGATION BUTTON BAR (LEGIBLE DARK PILLS)
     other_screens = [k for k in screens_dict.keys() if k != app_mode]
     
+    # RENDER STYLIZED HTML FORM BUTTONS SPANNING THE WIDTH OF THE PAGE
     nav_html = '<div style="display:flex; justify-content:space-between; align-items:center; width:100%; gap:12px; margin-bottom:18px;">'
     for s_key in other_screens:
         screen_label = screens_dict[s_key]
         nav_html += f'''
             <form action="" method="get" style="flex:1; margin:0;">
-                <button type="submit" name="screen" value="{s_key}" style="
+                <input type="hidden" name="screen" value="{s_key}">
+                <button type="submit" style="
                     width: 100%;
                     background-color: #151D2A;
                     border: 1.5px solid #2B3A52;
@@ -387,6 +394,7 @@ def render_screen_header(title_text):
     # Handle query param navigation
     query_screen = st.query_params.get("screen")
     if query_screen and query_screen in screens_dict and query_screen != app_mode:
+        st.session_state["app_mode"] = query_screen
         st.query_params.clear()
         st.rerun()
 

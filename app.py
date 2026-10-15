@@ -18,12 +18,6 @@ html, body, [class*="css"], .stApp {
     color: #F8FAFC !important;
 }
 
-/* KILLS RESIDUAL TABS BUT PRESERVES GAMBLY EXPANDER */
-div[data-baseweb="tab-list"],
-div[data-testid="stTabs"] {
-    display: none !important;
-}
-
 /* STYLES THE GAMBLY EXPANDER TO LOOK SLEEK AND INTENTIONAL */
 div[data-testid="stExpander"] {
     background-color: #0C111C !important;
@@ -36,6 +30,43 @@ div[data-testid="stExpander"] summary {
     font-weight: 800 !important;
     color: #FFFFFF !important;
     padding: 10px 16px !important;
+}
+
+/* STREAMLIT TABS (WORKS CLEANLY ACROSS ALL SCREENS) */
+[data-testid="stTabs"] {
+    background-color: transparent !important;
+}
+[data-testid="stTabs"] div[data-baseweb="tab-list"] {
+    gap: 8px !important;
+    border-bottom: 2px solid #1E283D !important;
+    background-color: transparent !important;
+    padding-bottom: 4px !important;
+    margin-bottom: 12px !important;
+}
+[data-testid="stTabs"] div[data-baseweb="tab-highlight"],
+[data-testid="stTabs"] div[data-baseweb="tab-border"] {
+    display: none !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"] {
+    background-color: #121824 !important;
+    border: 1.5px solid #23304A !important;
+    border-radius: 12px !important;
+    padding: 6px 16px !important;
+    margin-right: 4px !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"] * {
+    color: #FFFFFF !important;
+    font-size: 0.90rem !important;
+    font-weight: 800 !important;
+    opacity: 1 !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
+    background-color: #1E293B !important;
+    border: 2px solid #00E676 !important;
+    box-shadow: 0 0 10px rgba(0, 230, 118, 0.3) !important;
+}
+[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * {
+    color: #00E676 !important;
 }
 
 /* Crisp Headings */
@@ -298,6 +329,28 @@ file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate:", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
+# DYNAMIC FILE MODIFIED TIMESTAMP (DISPLAYED AT TOP-RIGHT OF EVERY HEADER)
+if os.path.exists(file_path):
+    mtime = os.path.getmtime(file_path)
+    file_updated_dt = datetime.fromtimestamp(mtime)
+    file_updated_str = file_updated_dt.strftime("%b %-d, %-I:%M %p EST")
+else:
+    file_updated_str = "Recently"
+
+def render_screen_header(title_text):
+    h_col1, h_col2 = st.columns([3, 1])
+    with h_col1:
+        st.markdown(f"<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>{title_text}</h1>", unsafe_allow_html=True)
+    with h_col2:
+        st.markdown(
+            f"<div style='text-align:right; margin-top:14px;'>"
+            f"<span style='background:#121824; border:1px solid #23304A; color:#94A3B8; font-size:12px; font-weight:800; padding:6px 14px; border-radius:14px; display:inline-block;'>"
+            f"🕐 Updated: <b style='color:#FFFFFF;'>{file_updated_str}</b>"
+            f"</span>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
 app_mode = st.sidebar.radio(
     "📱 Screen:", 
     [
@@ -419,7 +472,7 @@ def render_props_cash_chart(row, last_5_raw):
         height=140, width=320
     ).configure(background="transparent").configure_view(strokeWidth=0)
 
-# SINGLE PROPS.CASH BOOK CARD (ACCURATE DYNAMIC PROBABILITIES)
+# SINGLE PROPS.CASH BOOK CARD (HEAD-TO-HEAD DISPLAY WITH REAL ALT ODDS)
 def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk_key, is_alt_mode=False):
     book_html = get_book_styled(r["Book"])
     star_badge = get_best_line_badge_html(r.get("Line_Adv_Note", ""))
@@ -453,17 +506,17 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     margin_arrow = "▲" if is_pos else "▼"
     margin_color = "#00E676" if is_pos else "#FF3B30"
 
-    # PARLAY LIKELIHOOD COLORING:
-    # Book Win Prob: >= 50% Green (Favored), < 50% Red (Underdog)
+    # PARLAY LIKELIHOOD: >= 50% IS GREEN (FAVORED TO HIT), < 50% IS RED (UNDERDOG)
     raw_bp = r.get("_raw_book_prob")
     try:
-        val_clean_b = float(str(raw_bp).replace("%", "").strip())
-        norm_bp = val_clean_b if val_clean_b <= 1.0 else val_clean_b / 100.0
+        val_clean = float(str(raw_bp).replace("%", "").strip())
+        norm_bp = val_clean if val_clean <= 1.0 else val_clean / 100.0
     except:
         norm_bp = 0.50
+
     b_prob_color = "#00E676" if norm_bp >= 0.50 else "#FF3B30"
 
-    # Model Win Prob: >= 50% Green (Favored by Model), < 50% Red (Underdog)
+    # MODEL WIN PROB: >= 50% IS GREEN, < 50% IS RED
     raw_mp = r.get("Win Prob")
     try:
         val_clean_m = float(str(raw_mp).replace("%", "").strip())
@@ -775,7 +828,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
 # SCREEN 1: PRO VISUALIZER (OVER / UNDER)
 # ==============================================================================
 if app_mode == "📊 Pro Visualizer: Over / Under":
-    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>📊 Pro Visualizer: Over / Under</h1>", unsafe_allow_html=True)
+    render_screen_header("📊 Pro Visualizer: Over / Under")
     ou_df = load_visualizer_data(["Top DK OU", "Top FD OU"])
     if ou_df.empty:
         st.warning("No Over/Under props found in this workbook.")
@@ -786,7 +839,7 @@ if app_mode == "📊 Pro Visualizer: Over / Under":
 # SCREEN 2: PRO VISUALIZER (ALT LINES)
 # ==============================================================================
 elif app_mode == "⚡ Pro Visualizer: Alt Lines":
-    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>⚡ Pro Visualizer: Alt Lines</h1>", unsafe_allow_html=True)
+    render_screen_header("⚡ Pro Visualizer: Alt Lines")
     alt_df = load_visualizer_data(["Top DK Alt Lines", "Top FD Alt Lines"])
     if alt_df.empty:
         st.warning("No Alt Line props found in this workbook.")
@@ -794,10 +847,10 @@ elif app_mode == "⚡ Pro Visualizer: Alt Lines":
         render_prop_visualizer(alt_df, is_alt_mode=True)
 
 # ==============================================================================
-# SCREEN 3: BEST OF THE BEST
+# SCREEN 3: BEST OF THE BEST (SKIP UNPOSTED ALT PROPS & PROBABILITY COLOR CODED)
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
-    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>💎 Best of the Best (Top Conviction Plays)</h1>", unsafe_allow_html=True)
+    render_screen_header("💎 Best of the Best (Top Conviction Plays)")
     all_curated = load_visualizer_data(["Top DK OU", "Top FD OU", "Top DK Alt Lines", "Top FD Alt Lines"])
     
     if all_curated.empty:
@@ -805,6 +858,10 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
     else:
         sanitized_plays = []
         for _, r_cand in all_curated.iterrows():
+            odds_str_check = str(r_cand.get("Odds", "-")).strip()
+            if odds_str_check in ["-", "", "nan", "None"]:
+                continue
+
             p_n, line_f, clean_display_line = extract_sanitized_prop_and_line(r_cand)
             if not p_n or line_f is None: continue
             
@@ -911,6 +968,9 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 calc_bp_best = get_or_calculate_book_prob(row.get("Book Win Prob"), row.get("Odds"))
                 book_prob = format_percentage(calc_bp_best) if calc_bp_best is not None else "-"
                 
+                b_color = "#00E676" if (calc_bp_best is not None and calc_bp_best >= 0.50) else "#FF3B30"
+                m_color_prob = "#00E676" if row.get("_model_prob", 0.5) >= 0.50 else "#FF3B30"
+
                 model_prob = format_percentage(row.get("_model_prob"))
                 ev_clean = format_percentage(row.get("EV"), is_ev=True)
 
@@ -936,13 +996,13 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                         st.markdown(f"<span style='font-size:12.5px; font-weight:800; color:{m_color}; background:{m_bg}; padding:3px 8px; border-radius:5px; border:1px solid {m_border};'>Margin: {margin_val:+0.1f}</span>", unsafe_allow_html=True)
                     with c4:
                         st.markdown(f"<div style='font-size:1.25rem; font-weight:800; color:#00E676;'>{ev_clean} EV</div>", unsafe_allow_html=True)
-                        st.caption(f"Win Prob: **{model_prob}** (Book: {book_prob})")
+                        st.caption(f"Win Prob: <b style='color:{m_color_prob};'>{model_prob}</b> (Book: <b style='color:{b_color};'>{book_prob}</b>)", unsafe_allow_html=True)
 
 # ==============================================================================
-# SCREEN 4: MASTER EV TABLES
+# SCREEN 4: MASTER EV TABLES (RESTORED WITH ACTIVE TABS & DETAILED FILTERS)
 # ==============================================================================
 elif app_mode == "📋 Master EV Tables":
-    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>📋 Master EV Tables & Projections</h1>", unsafe_allow_html=True)
+    render_screen_header("📋 Master EV Tables & Projections")
 
     tab_names = [s for s in excel_data.sheet_names if s != "How To Use"]
     tabs = st.tabs(tab_names)

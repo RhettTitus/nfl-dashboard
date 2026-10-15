@@ -51,13 +51,23 @@ div[data-testid="stExpander"] summary {
     display: none !important; 
 } 
 
-/* 1. Unselected Tabs */
+/* 1. Unselected Tabs (Changes background to dark so text is visible) */
+[data-testid="stTabs"] button[data-baseweb="tab"] { 
+    background-color: #121824 !important; /* Force a dark background instead of Streamlit white */
+    border: 1.5px solid #23304A !important; 
+    border-radius: 12px !important; 
+    padding: 6px 16px !important; 
+    margin-right: 4px !important; 
+} 
+
+/* Forces the inner text and icons inside unselected tabs to be black */
 [data-testid="stTabs"] button[data-baseweb="tab"] * { 
     color: #000000 !important; 
     font-size: 0.90rem !important; 
     font-weight: 800 !important; 
     opacity: 1 !important; 
 } 
+ 
 
 /* 2. Selected/Active Tab */
 [data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] * { 

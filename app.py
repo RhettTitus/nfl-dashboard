@@ -18,12 +18,24 @@ html, body, [class*="css"], .stApp {
     color: #F8FAFC !important;
 }
 
-/* KILLS ANY RESIDUAL TABS OR EXPANDER DOM ARTIFACTS */
-div[data-testid="stExpander"],
-details[data-testid="stExpander"],
+/* KILLS RESIDUAL TABS BUT PRESERVES GAMBLY EXPANDER */
 div[data-baseweb="tab-list"],
 div[data-testid="stTabs"] {
     display: none !important;
+}
+
+/* STYLES THE GAMBLY EXPANDER TO LOOK SLEEK AND INTENTIONAL */
+div[data-testid="stExpander"] {
+    background-color: #0C111C !important;
+    border: 1.5px solid #1E283D !important;
+    border-radius: 14px !important;
+    margin-bottom: 16px !important;
+}
+div[data-testid="stExpander"] summary {
+    font-size: 1.05rem !important;
+    font-weight: 800 !important;
+    color: #FFFFFF !important;
+    padding: 10px 16px !important;
 }
 
 /* Crisp Headings */
@@ -178,7 +190,8 @@ def format_american_odds(val):
     if pd.isna(val) or val == "-" or str(val).strip().lower() in ["nan", "none", "", "unposted"]:
         return "-"
     try:
-        f_val = int(float(val))
+        clean_str = str(val).replace("+", "").strip()
+        f_val = int(float(clean_str))
         return f"+{f_val}" if f_val > 0 else f"{f_val}"
     except:
         return str(val)
@@ -200,7 +213,6 @@ def format_short_gametime(raw_time_str):
         return str(raw_time_str).replace(" EST", "")
 
 def extract_sanitized_prop_and_line(r):
-    # Check standard Prop column first
     p_val = r.get("Prop")
     is_alt = False
     if pd.isna(p_val) or str(p_val).strip().lower() in ["nan", "none", "", "unposted"]:
@@ -213,9 +225,7 @@ def extract_sanitized_prop_and_line(r):
     raw_str = str(p_val).strip()
     line_val = r.get("Line")
 
-    # If it's an alt line like "75+ Rec Yds" or "75+ Rec Yds (Over 74.5)"
     if is_alt:
-        # Extract the line threshold
         m_over = re.search(r"Over\s*(\d+(\.\d+)?)", raw_str, re.IGNORECASE)
         m_plus = re.search(r"(\d+(\.\d+)?)\+", raw_str)
 
@@ -229,14 +239,12 @@ def extract_sanitized_prop_and_line(r):
         else:
             return None, None, None
 
-        # Clean prop name to avoid "75 75+ Rec Yds" (extracts pure "Rec Yds")
         pure_prop = re.sub(r"^\d+\+\s*", "", raw_str)
         pure_prop = re.sub(r"\(.*?\)", "", pure_prop).strip()
         display_label = f"{int(line_f) if line_f.is_integer() else line_f}+ {pure_prop}"
         return pure_prop, line_f, display_label
 
     else:
-        # Standard Over/Under line
         if pd.isna(line_val) or str(line_val).strip().lower() in ["nan", "none", "", "unposted"]:
             return None, None, None
         try:
@@ -411,7 +419,7 @@ def render_props_cash_chart(row, last_5_raw):
         height=140, width=320
     ).configure(background="transparent").configure_view(strokeWidth=0)
 
-# SINGLE PROPS.CASH BOOK CARD (HEAD-TO-HEAD DISPLAY)
+# SINGLE PROPS.CASH BOOK CARD (HEAD-TO-HEAD DISPLAY WITH REAL ALT ODDS)
 def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk_key, is_alt_mode=False):
     book_html = get_book_styled(r["Book"])
     star_badge = get_best_line_badge_html(r.get("Line_Adv_Note", ""))
@@ -445,8 +453,15 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     margin_arrow = "▲" if is_pos else "▼"
     margin_color = "#00E676" if is_pos else "#FF3B30"
 
-    b_prob_raw = r.get("_raw_book_prob", 0.5)
-    b_prob_color = "#00E676" if b_prob_raw <= 0.524 else "#FF3B30"
+    # PARLAY LIKELIHOOD: >= 50% IS GREEN (FAVORED TO HIT), < 50% IS RED (UNDERDOG)
+    raw_bp = r.get("_raw_book_prob")
+    try:
+        val_clean = float(str(raw_bp).replace("%", "").strip())
+        norm_bp = val_clean if val_clean <= 1.0 else val_clean / 100.0
+    except:
+        norm_bp = 0.50
+
+    b_prob_color = "#00E676" if norm_bp >= 0.50 else "#FF3B30"
 
     hist_sig = str(r.get("History Signal", "-")).strip()
     hist_badge = ""
@@ -460,10 +475,13 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     if "DUAL CONFIRMED" in live_sig:
         live_badge = '<span style="background:#8B5CF620; color:#A78BFA; border:1px solid #8B5CF6; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:800; margin-left:6px;">⚡ DUAL CONFIRMED</span>'
 
-    odds_str = f"({r['Odds']})" if r['Odds'] != "-" else ""
-    prob_delta_str = f"({r['Prob Delta']})" if r['Prob Delta'] else ""
+    # CLEAR ODDS TAGGING
+    odds_raw_val = r.get("Odds", "-")
+    if odds_raw_val in ["-", "", "nan", "None"]:
+        odds_str = "<span style='font-size:0.85rem; color:#94A3B8; font-weight:600;'>(Unposted Line)</span>"
+    else:
+        odds_str = f"<span style='font-size:0.92rem; font-weight:600; color:#94A3B8;'>({odds_raw_val})</span>"
 
-    # CLEAN DISPLAY: NO "75 75+ Rec Yds"
     line_display_clean = r.get("Clean_Display_Line", "")
 
     card_top_html = (
@@ -509,7 +527,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     card_bot_html = (
         f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-top:none; padding:10px 18px 14px 18px; border-bottom-left-radius:14px; border-bottom-right-radius:14px;">'
         f'<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">'
-        f'<span style="font-size:1.15rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{line_display_clean} <span style="font-size:0.92rem; font-weight:600; color:#94A3B8;">{odds_str}</span></span>'
+        f'<span style="font-size:1.15rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{line_display_clean} {odds_str}</span>'
         f'<span style="font-size:1.20rem; font-weight:900; color:#00E676; letter-spacing:0.3px;">{r["EV"]} EV</span>'
         f'</div>'
         f'</div>'
@@ -593,7 +611,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             live_sig = str(r.get("Live Signal", "-"))
 
             calc_bp = get_or_calculate_book_prob(book_prob_raw, odds_val)
-            book_prob_str = format_percentage(calc_bp) if calc_bp is not None else "-"
+            book_prob_str = format_percentage(calc_bp) if calc_bp is not None else ("Unposted" if odds_val in ["-", "nan", "None", ""] else "-")
 
             prob_delta_str = None
             if calc_bp is not None and str(model_prob).strip() not in ["-", "nan", ""]:
@@ -644,7 +662,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
     raw_props_df = pd.DataFrame(prop_rows).drop_duplicates(subset=["Player", "Prop Label", "Vegas Line"])
     props_df = tag_best_line_advantages(raw_props_df)
 
-    # Detailed Prop Category Filtering
     if selected_prop_filter == "Passing Yards":
         props_df = props_df[props_df["Prop Name"].str.contains("Pass Yds|Passing Yards", case=False, na=False)]
     elif selected_prop_filter == "Pass Attempts":
@@ -662,7 +679,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         st.info("No props available under this filter.")
         return
 
-    # GAMBLY COPY BOX
     selected_dk_bets = []
     selected_fd_bets = []
 
@@ -676,6 +692,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
     selected_dk_bets = list(dict.fromkeys(selected_dk_bets))
     selected_fd_bets = list(dict.fromkeys(selected_fd_bets))
 
+    # RESTORED GAMBLY EXPANDER SLIP CONTAINER
     with st.expander("📋 Interactive Gambly Slips (Tap '➕ Add to Slip' Below)", expanded=(len(selected_dk_bets) > 0 or len(selected_fd_bets) > 0)):
         col_clear, _ = st.columns([1, 4])
         with col_clear:

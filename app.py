@@ -4,6 +4,7 @@ import os
 import re
 from datetime import datetime, timedelta
 import altair as alt
+from openpyxl import load_workbook
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
@@ -18,12 +19,6 @@ html, body, [class*="css"], .stApp {
     color: #F8FAFC !important;
 }
 
-/* KILLS RESIDUAL TABS BUT PRESERVES GAMBLY EXPANDER */
-div[data-baseweb="tab-list"],
-div[data-testid="stTabs"] {
-    display: none !important;
-}
-
 /* STYLES THE GAMBLY EXPANDER TO LOOK SLEEK AND INTENTIONAL */
 div[data-testid="stExpander"] {
     background-color: #0C111C !important;
@@ -36,6 +31,21 @@ div[data-testid="stExpander"] summary {
     font-weight: 800 !important;
     color: #FFFFFF !important;
     padding: 10px 16px !important;
+}
+
+/* KILLS RESIDUAL TABS DOM ARTIFACTS ONLY (DO NOT HIDE EXPANDERS) */
+div[data-baseweb="tab-list"],
+div[data-testid="stTabs"] {
+    display: none !important;
+}
+
+/* MASTER CARD CONTAINER */
+div[data-testid="stVerticalBlockBorderWrapper"] > div {
+    background-color: rgb(12, 17, 28) !important;
+    border: 1.5px solid rgb(30, 40, 61) !important;
+    border-radius: 16px !important;
+    padding: 14px 18px !important;
+    box-shadow: rgba(0, 0, 0, 0.4) 0px 6px 16px !important;
 }
 
 /* Crisp Headings */
@@ -60,16 +70,45 @@ div[data-baseweb="popover"] {
     background-color: #121824 !important;
 }
 
-/* Flush Checkbox inside Book Card */
+/* PRO BUTTONS: INACTIVE BUTTONS */
+div[data-testid="stHorizontalBlock"] button[kind="secondary"] {
+    background-color: #151D2A !important;
+    border: 1.5px solid #2B3A52 !important;
+    border-radius: 8px !important;
+    padding: 4px 12px !important;
+    color: #FFFFFF !important;
+    font-weight: 800 !important;
+    font-size: 0.82rem !important;
+    white-space: nowrap !important;
+    width: auto !important;
+    margin-bottom: 4px !important;
+}
+
+/* PRO BUTTONS: ACTIVE SELECTED BUTTON LIGHTS UP RED */
+div[data-testid="stHorizontalBlock"] button[kind="primary"] {
+    background-color: #381518 !important;
+    border: 2px solid #FF3B30 !important;
+    border-radius: 8px !important;
+    padding: 4px 12px !important;
+    color: #FF3B30 !important;
+    font-weight: 900 !important;
+    font-size: 0.82rem !important;
+    white-space: nowrap !important;
+    width: auto !important;
+    box-shadow: 0 0 10px rgba(255, 59, 48, 0.45) !important;
+    margin-bottom: 4px !important;
+}
+
+/* Checkbox Styling inside Book Cards */
 div[data-testid="stCheckbox"] {
     background: #111827 !important;
     border: 1.5px solid #243048 !important;
     border-top: none !important;
-    border-bottom-left-radius: 14px !important;
-    border-bottom-right-radius: 14px !important;
+    border-bottom-left-radius: 12px !important;
+    border-bottom-right-radius: 12px !important;
     padding: 8px 16px !important;
-    margin-top: -6px !important;
-    margin-bottom: 16px !important;
+    margin-top: -8px !important;
+    margin-bottom: 10px !important;
 }
 div[data-testid="stCheckbox"] label span:first-child {
     width: 18px !important;
@@ -129,16 +168,23 @@ def clean_player_name(name):
 @st.cache_data(ttl=86400)
 def load_verified_headshots():
     headshot_map = {}
-    for yr in [2024, 2023]:
+    
+    sources = [
+        ("https://github.com/nflverse/nflverse-data/releases/download/players/players.csv", "display_name", "headshot"),
+        ("https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_2024.csv", "full_name", "headshot_url"),
+        ("https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_2023.csv", "full_name", "headshot_url")
+    ]
+    
+    for url, name_col, hs_col in sources:
         try:
-            url = f"https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_{yr}.csv"
-            df = pd.read_csv(url, usecols=["full_name", "headshot_url"]).dropna()
+            df = pd.read_csv(url, usecols=[name_col, hs_col]).dropna()
             for _, row in df.iterrows():
-                c_name = clean_player_name(row["full_name"])
+                c_name = clean_player_name(row[name_col])
                 if c_name and c_name not in headshot_map:
-                    headshot_map[c_name] = str(row["headshot_url"])
+                    headshot_map[c_name] = str(row[hs_col])
         except Exception:
             pass
+            
     return headshot_map
 
 headshot_db = load_verified_headshots()
@@ -298,6 +344,39 @@ file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate:", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
+# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP
+@st.cache_data(ttl=60)
+def get_file_imported_time(f_path):
+    if not os.path.exists(f_path):
+        return "Recently"
+    try:
+        wb_meta = load_workbook(f_path, read_only=True)
+        created_dt = wb_meta.properties.created or wb_meta.properties.modified
+        if created_dt:
+            est_dt = created_dt - timedelta(hours=4) if created_dt.tzinfo is None else created_dt.astimezone(pytz.timezone("US/Eastern"))
+            return est_dt.strftime("%b %-d, %-I:%M %p EST")
+    except:
+        pass
+    mtime = os.path.getmtime(f_path)
+    return datetime.fromtimestamp(mtime).strftime("%b %-d, %-I:%M %p EST")
+
+file_imported_str = get_file_imported_time(file_path)
+
+def render_screen_header(title_text):
+    h_col1, h_col2 = st.columns([3, 1])
+    with h_col1:
+        st.markdown(f"<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>{title_text}</h1>", unsafe_allow_html=True)
+    with h_col2:
+        st.markdown(
+            f"<div style='text-align:right; margin-top:8px;'>"
+            f"<div style='background:#121824; border:1px solid #23304A; border-radius:10px; padding:6px 12px; display:inline-block; text-align:right;'>"
+            f"<div style='color:#94A3B8; font-size:10.5px; font-weight:800; letter-spacing:0.5px; text-transform:uppercase;'>Last Updated</div>"
+            f"<div style='color:#FFFFFF; font-size:12.5px; font-weight:800; margin-top:1px;'>{file_imported_str}</div>"
+            f"</div>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
 app_mode = st.sidebar.radio(
     "📱 Screen:", 
     [
@@ -419,7 +498,7 @@ def render_props_cash_chart(row, last_5_raw):
         height=140, width=320
     ).configure(background="transparent").configure_view(strokeWidth=0)
 
-# SINGLE PROPS.CASH BOOK CARD (HEAD-TO-HEAD DISPLAY WITH REAL ALT ODDS)
+# SINGLE PROPS.CASH BOOK CARD
 def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk_key, is_alt_mode=False):
     book_html = get_book_styled(r["Book"])
     star_badge = get_best_line_badge_html(r.get("Line_Adv_Note", ""))
@@ -453,7 +532,6 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     margin_arrow = "▲" if is_pos else "▼"
     margin_color = "#00E676" if is_pos else "#FF3B30"
 
-    # PARLAY LIKELIHOOD: >= 50% IS GREEN (FAVORED TO HIT), < 50% IS RED (UNDERDOG)
     raw_bp = r.get("_raw_book_prob")
     try:
         val_clean = float(str(raw_bp).replace("%", "").strip())
@@ -463,7 +541,6 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
 
     b_prob_color = "#00E676" if norm_bp >= 0.50 else "#FF3B30"
 
-    # MODEL WIN PROB: >= 50% IS GREEN, < 50% IS RED
     raw_mp = r.get("Win Prob")
     try:
         val_clean_m = float(str(raw_mp).replace("%", "").strip())
@@ -484,7 +561,6 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     if "DUAL CONFIRMED" in live_sig:
         live_badge = '<span style="background:#8B5CF620; color:#A78BFA; border:1px solid #8B5CF6; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:800; margin-left:6px;">⚡ DUAL CONFIRMED</span>'
 
-    # CLEAR ODDS TAGGING
     odds_raw_val = r.get("Odds", "-")
     if odds_raw_val in ["-", "", "nan", "None"]:
         odds_str = "<span style='font-size:0.85rem; color:#94A3B8; font-weight:600;'>(Unposted Line)</span>"
@@ -492,6 +568,10 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
         odds_str = f"<span style='font-size:0.92rem; font-weight:600; color:#94A3B8;'>({odds_raw_val})</span>"
 
     line_display_clean = r.get("Clean_Display_Line", "")
+    if "+" in line_display_clean:
+        full_pick_string = line_display_clean
+    else:
+        full_pick_string = f"{r['Pick']} {format_clean_decimal(r['Vegas Line'])} {line_display_clean}"
 
     card_top_html = (
         f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-top-left-radius:14px; border-top-right-radius:14px; padding:16px 18px; border-bottom:none;">'
@@ -536,7 +616,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     card_bot_html = (
         f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-top:none; padding:10px 18px 14px 18px; border-bottom-left-radius:14px; border-bottom-right-radius:14px;">'
         f'<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;">'
-        f'<span style="font-size:1.15rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{line_display_clean} {odds_str}</span>'
+        f'<span style="font-size:1.15rem; font-weight:900; color:#FFFFFF; letter-spacing:0.3px;">{full_pick_string} <span style="font-size:0.92rem; font-weight:600; color:#94A3B8;">{odds_str}</span></span>'
         f'<span style="font-size:1.20rem; font-weight:900; color:#00E676; letter-spacing:0.3px;">{r["EV"]} EV</span>'
         f'</div>'
         f'</div>'
@@ -625,7 +705,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             live_sig = str(r.get("Live Signal", "-"))
 
             calc_bp = get_or_calculate_book_prob(book_prob_raw, odds_val)
-            book_prob_str = format_percentage(calc_bp) if calc_bp is not None else "-"
+            book_prob_str = format_percentage(calc_bp) if calc_bp is not None else ("Unposted" if odds_val in ["-", "nan", "None", ""] else "-")
 
             prob_delta_str = None
             if calc_bp is not None and str(model_prob).strip() not in ["-", "nan", ""]:
@@ -699,7 +779,12 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
     for _, r_check in props_df.iterrows():
         chk_id = f"chk_{r_check['Player']}_{r_check['Book']}_{r_check['Prop Name']}_{format_clean_decimal(r_check['Vegas Line'])}_{is_alt_mode}"
         if st.session_state.get(chk_id, False):
-            bet_line = format_gambly_bet_string(r_check['Player'], r_check['Pick'], r_check['Vegas Line'], r_check['Clean_Display_Line'])
+            line_display_clean = r_check.get("Clean_Display_Line", "")
+            if "+" in line_display_clean:
+                bet_line = f"{r_check['Player']} {line_display_clean}"
+            else:
+                bet_line = format_gambly_bet_string(r_check['Player'], r_check['Pick'], r_check['Vegas Line'], r_check['Clean_Display_Line'])
+            
             if r_check['Book'] == 'DraftKings': selected_dk_bets.append(bet_line)
             elif r_check['Book'] == 'FanDuel': selected_fd_bets.append(bet_line)
 
@@ -776,7 +861,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
 # SCREEN 1: PRO VISUALIZER (OVER / UNDER)
 # ==============================================================================
 if app_mode == "📊 Pro Visualizer: Over / Under":
-    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>📊 Pro Visualizer: Over / Under</h1>", unsafe_allow_html=True)
+    render_screen_header("📊 Pro Visualizer: Over / Under")
     ou_df = load_visualizer_data(["Top DK OU", "Top FD OU"])
     if ou_df.empty:
         st.warning("No Over/Under props found in this workbook.")
@@ -787,7 +872,7 @@ if app_mode == "📊 Pro Visualizer: Over / Under":
 # SCREEN 2: PRO VISUALIZER (ALT LINES)
 # ==============================================================================
 elif app_mode == "⚡ Pro Visualizer: Alt Lines":
-    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>⚡ Pro Visualizer: Alt Lines</h1>", unsafe_allow_html=True)
+    render_screen_header("⚡ Pro Visualizer: Alt Lines")
     alt_df = load_visualizer_data(["Top DK Alt Lines", "Top FD Alt Lines"])
     if alt_df.empty:
         st.warning("No Alt Line props found in this workbook.")
@@ -798,7 +883,7 @@ elif app_mode == "⚡ Pro Visualizer: Alt Lines":
 # SCREEN 3: BEST OF THE BEST (SKIP UNPOSTED ALT PROPS & PROBABILITY COLOR CODED)
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
-    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>💎 Best of the Best (Top Conviction Plays)</h1>", unsafe_allow_html=True)
+    render_screen_header("💎 Best of the Best (Top Conviction Plays)")
     all_curated = load_visualizer_data(["Top DK OU", "Top FD OU", "Top DK Alt Lines", "Top FD Alt Lines"])
     
     if all_curated.empty:
@@ -806,7 +891,6 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
     else:
         sanitized_plays = []
         for _, r_cand in all_curated.iterrows():
-            # SKIP ANY UNPOSTED PROPS WITH DASH ODDS
             odds_str_check = str(r_cand.get("Odds", "-")).strip()
             if odds_str_check in ["-", "", "nan", "None"]:
                 continue
@@ -917,7 +1001,6 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 calc_bp_best = get_or_calculate_book_prob(row.get("Book Win Prob"), row.get("Odds"))
                 book_prob = format_percentage(calc_bp_best) if calc_bp_best is not None else "-"
                 
-                # COLOR CODE WIN PROBABILITIES IN SCREEN 3
                 b_color = "#00E676" if (calc_bp_best is not None and calc_bp_best >= 0.50) else "#FF3B30"
                 m_color_prob = "#00E676" if row.get("_model_prob", 0.5) >= 0.50 else "#FF3B30"
 
@@ -932,6 +1015,11 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 m_bg = "#00E67610" if is_pos else "#FF3B3010"
                 m_border = "#00E67680" if is_pos else "#FF3B3080"
 
+                if "+" in display_label:
+                    full_pick_string = display_label
+                else:
+                    full_pick_string = f"{side_clean} {line_display} {display_label}"
+
                 with st.container(border=True):
                     c1, c2, c3, c4 = st.columns([1, 4, 3, 3])
                     with c1:
@@ -942,7 +1030,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                         st.markdown(f"📌 {prop_n} [{book_s}]", unsafe_allow_html=True)
                         st.caption(f"Action: `{row.get('Action', 'STRONG BET')}`")
                     with c3:
-                        st.markdown(f"<div style='font-size:1.10rem; font-weight:800; color:#FFFFFF;'>{display_label} <span style='color:#94A3B8; font-weight:600;'>{odds_str}</span></div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size:1.10rem; font-weight:800; color:#FFFFFF;'>{full_pick_string} <span style='color:#94A3B8; font-weight:600;'>{odds_str}</span></div>", unsafe_allow_html=True)
                         st.markdown(f"<span style='font-size:12.5px; font-weight:800; color:{m_color}; background:{m_bg}; padding:3px 8px; border-radius:5px; border:1px solid {m_border};'>Margin: {margin_val:+0.1f}</span>", unsafe_allow_html=True)
                     with c4:
                         st.markdown(f"<div style='font-size:1.25rem; font-weight:800; color:#00E676;'>{ev_clean} EV</div>", unsafe_allow_html=True)
@@ -952,7 +1040,7 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
 # SCREEN 4: MASTER EV TABLES
 # ==============================================================================
 elif app_mode == "📋 Master EV Tables":
-    st.markdown("<h1 style='color:#FFFFFF; font-weight:900; margin-bottom:12px;'>📋 Master EV Tables & Projections</h1>", unsafe_allow_html=True)
+    render_screen_header("📋 Master EV Tables & Projections")
 
     tab_names = [s for s in excel_data.sheet_names if s != "How To Use"]
     tabs = st.tabs(tab_names)

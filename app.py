@@ -5,7 +5,7 @@ import re
 from datetime import datetime, timedelta
 import altair as alt
 from openpyxl import load_workbook
-import pytZ
+import pytz
 
 st.set_page_config(page_title="NFL Quant Dashboard", layout="wide", page_icon="🏈")
 
@@ -324,7 +324,7 @@ def get_or_calculate_book_prob(book_prob_raw, odds_raw):
     return None
 
 # --------------------------------------------------------------------------
-# SIDEBAR NAVIGATION & TOP QUICK-NAV BUTTONS
+# SIDEBAR NAVIGATION
 # --------------------------------------------------------------------------
 st.sidebar.title("🏈 NFL Quant Engine")
 file_names = [x["filename"] for x in dated_files]
@@ -359,7 +359,6 @@ screens_dict = {
 app_mode = st.sidebar.radio("📱 Screen:", list(screens_dict.keys()))
 
 def render_screen_header(title_text):
-    # TOP QUICK-NAV BUTTON BAR (EXCLUDES CURRENT PAGE)
     other_screens = [k for k in screens_dict.keys() if k != app_mode]
     nav_cols = st.columns(len(other_screens) + 1)
     for idx, s_key in enumerate(other_screens):
@@ -499,7 +498,7 @@ def render_props_cash_chart(row, last_5_raw):
         height=140, width=320
     ).configure(background="transparent").configure_view(strokeWidth=0)
 
-# SINGLE PROPS.CASH BOOK CARD
+# SINGLE PROPS.CASH BOOK CARD (HEAD-TO-HEAD DISPLAY WITH REAL ALT ODDS)
 def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk_key, is_alt_mode=False):
     book_html = get_book_styled(r["Book"])
     star_badge = get_best_line_badge_html(r.get("Line_Adv_Note", ""))

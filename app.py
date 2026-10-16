@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import altair as alt
 from openpyxl import load_workbook
 
@@ -33,10 +34,32 @@ div[data-testid="stExpander"] summary {
     padding: 10px 16px !important;
 }
 
-/* KILLS RESIDUAL TABS DOM ARTIFACTS ONLY (DO NOT HIDE EXPANDERS) */
-div[data-baseweb="tab-list"],
-div[data-testid="stTabs"] {
-    display: none !important;
+/* MASTER EV TABS: previously hidden (display:none) which made the Master EV
+   sheet vanish. Now they are visible and themed to match the dashboard. */
+div[data-baseweb="tab-list"] {
+    gap: 6px !important;
+    background: transparent !important;
+    border-bottom: 1.5px solid #1E283D !important;
+    flex-wrap: wrap !important;
+}
+button[data-baseweb="tab"] {
+    background-color: #151D2A !important;
+    border: 1.5px solid #2B3A52 !important;
+    border-radius: 10px 10px 0 0 !important;
+    padding: 6px 14px !important;
+    color: #94A3B8 !important;
+    font-weight: 800 !important;
+    font-size: 0.85rem !important;
+}
+button[data-baseweb="tab"][aria-selected="true"] {
+    background-color: #381518 !important;
+    border-color: #FF3B30 !important;
+    color: #FF3B30 !important;
+    box-shadow: 0 0 10px rgba(255, 59, 48, 0.35) !important;
+}
+div[data-baseweb="tab-highlight"],
+div[data-baseweb="tab-border"] {
+    background-color: transparent !important;
 }
 
 /* MASTER CARD CONTAINER */
@@ -337,6 +360,28 @@ def get_or_calculate_book_prob(book_prob_raw, odds_raw):
     return None
 
 # --------------------------------------------------------------------------
+# SIDE-AWARE HIT LOGIC (FIX): a game is a "hit" for the BET SIDE, not always Over.
+#   Over  -> stat >= line   (also correct for alt-line milestones like 70+)
+#   Under -> stat <  line
+# --------------------------------------------------------------------------
+def is_under_side(side):
+    return str(side).strip().lower() == "under"
+
+def game_is_hit(value, line, side):
+    return (value < line) if is_under_side(side) else (value >= line)
+
+def parse_last_5(last_5_raw):
+    if last_5_raw is None:
+        return []
+    s = str(last_5_raw).strip()
+    if not s or s in ["-", "nan", "None"]:
+        return []
+    try:
+        return [float(x.strip()) for x in s.split(",") if x.strip()]
+    except:
+        return []
+
+# --------------------------------------------------------------------------
 # SIDEBAR NAVIGATION
 # --------------------------------------------------------------------------
 st.sidebar.title("🏈 NFL Quant Engine")
@@ -353,12 +398,15 @@ def get_file_imported_time(f_path):
         wb_meta = load_workbook(f_path, read_only=True)
         created_dt = wb_meta.properties.created or wb_meta.properties.modified
         if created_dt:
-            est_dt = created_dt - timedelta(hours=4) if created_dt.tzinfo is None else created_dt.astimezone(pytz.timezone("US/Eastern"))
-            return est_dt.strftime("%b %-d, %-I:%M %p EST")
+            # openpyxl timestamps are naive UTC; convert properly to Eastern (handles EST/EDT)
+            if created_dt.tzinfo is None:
+                created_dt = created_dt.replace(tzinfo=timezone.utc)
+            est_dt = created_dt.astimezone(ZoneInfo("America/New_York"))
+            return est_dt.strftime("%b %-d, %-I:%M %p ET")
     except:
         pass
     mtime = os.path.getmtime(f_path)
-    return datetime.fromtimestamp(mtime).strftime("%b %-d, %-I:%M %p EST")
+    return datetime.fromtimestamp(mtime).strftime("%b %-d, %-I:%M %p")
 
 file_imported_str = get_file_imported_time(file_path)
 
@@ -443,15 +491,13 @@ def tag_best_line_advantages(df):
 
     return df
 
-# PROPS.CASH ADAPTIVE CHART
+# PROPS.CASH ADAPTIVE CHART (NOW SIDE-AWARE: green = the bet cashed, red = it missed)
 def render_props_cash_chart(row, last_5_raw):
     primary_line = float(row["Vegas Line"])
-    stats_list = []
-    if last_5_raw and last_5_raw not in ["-", "nan", ""]:
-        try:
-            stats_list = [float(x.strip()) for x in str(last_5_raw).split(",") if x.strip()]
-        except: pass
+    side = str(row.get("Pick", "Over")).strip()
+    under_bet = is_under_side(side)
 
+    stats_list = parse_last_5(last_5_raw)
     if not stats_list:
         return None
 
@@ -469,7 +515,11 @@ def render_props_cash_chart(row, last_5_raw):
         trend_points.append({"Date": d_str, "Value": val})
 
     t_df = pd.DataFrame(trend_points)
-    t_df["Result"] = t_df["Value"].apply(lambda v: "Over Hit" if v >= primary_line else "Under Miss")
+    # FIX: color by whether the BET SIDE hit, so an Under pick shows
+    # bars BELOW the dashed line as green and bars ABOVE it as red.
+    hit_label = "Under Hit" if under_bet else "Over Hit"
+    miss_label = "Over Miss" if under_bet else "Under Miss"
+    t_df["Result"] = t_df["Value"].apply(lambda v: hit_label if game_is_hit(v, primary_line, side) else miss_label)
 
     max_val = max(t_df["Value"]) if not t_df.empty else 5.0
     y_max = max(max_val * 1.45, primary_line * 1.55, 3.5)
@@ -477,7 +527,7 @@ def render_props_cash_chart(row, last_5_raw):
     hit_bars = alt.Chart(t_df).mark_bar(size=20, cornerRadius=3, strokeWidth=0).encode(
         x=alt.X("Date:N", title=None, sort=date_labels, axis=alt.Axis(labelAngle=0, labelFontWeight="bold", labelColor="#94A3B8", labelFontSize=10)),
         y=alt.Y("Value:Q", title=None, scale=alt.Scale(domain=[0, y_max]), axis=alt.Axis(labels=False, ticks=False, grid=False)),
-        color=alt.Color("Result:N", scale=alt.Scale(domain=["Over Hit", "Under Miss"], range=["#00E676", "#FF3B30"]), legend=None)
+        color=alt.Color("Result:N", scale=alt.Scale(domain=[hit_label, miss_label], range=["#00E676", "#FF3B30"]), legend=None)
     )
 
     text_bg = alt.Chart(t_df).mark_text(
@@ -514,18 +564,24 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     role_badge = f'<div style="font-size:0.80rem; color:#F59E0B; font-weight:800; letter-spacing:0.3px; margin-bottom:2px;">⚡ {role_alert}</div>' if role_alert and role_alert.lower() not in ["nan", "none", "", "null"] else ""
     game_badge = f'<div style="font-size:0.82rem; color:#94A3B8; font-weight:700; margin-bottom:2px;">{time_and_matchup} • {game_script}</div>' if time_and_matchup else ""
 
+    pick_side = str(r.get("Pick", "Over")).strip()
+    under_bet = is_under_side(pick_side)
+    line_num_str = format_clean_decimal(r["Vegas Line"])
+
+    # HIT RATE (FIX): measured for the side actually being bet.
+    # Under pick + 4 of 5 games over the line = 20% (not 80%).
     last_5_raw = str(r.get("Last 5", "")).strip()
     hit_rate_display = "-"
     hit_rate_color = "#00E676"
-    if last_5_raw and last_5_raw not in ["-", "nan", ""]:
-        try:
-            s_list = [float(x.strip()) for x in last_5_raw.split(",") if x.strip()]
-            if s_list:
-                hits = sum(x >= float(r["Vegas Line"]) for x in s_list)
-                pct = round((hits / len(s_list)) * 100)
-                hit_rate_display = f"▲ {pct}%"
-                hit_rate_color = "#00E676" if pct >= 50 else "#FF3B30"
-        except: pass
+    hit_rate_sub = ""
+    s_list = parse_last_5(last_5_raw)
+    if s_list:
+        hits = sum(game_is_hit(x, float(r["Vegas Line"]), pick_side) for x in s_list)
+        pct = round((hits / len(s_list)) * 100)
+        arrow = "▲" if pct >= 50 else "▼"
+        hit_rate_display = f"{arrow} {pct}%"
+        hit_rate_color = "#00E676" if pct >= 50 else "#FF3B30"
+        hit_rate_sub = f'<span style="font-size:10px; font-weight:700; color:#94A3B8;"> {hits}/{len(s_list)} {"U" if under_bet else "O"}</span>'
 
     margin_val = r["Margin"]
     is_pos = margin_val >= 0
@@ -571,7 +627,16 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     if "+" in line_display_clean:
         full_pick_string = line_display_clean
     else:
-        full_pick_string = f"{r['Pick']} {format_clean_decimal(r['Vegas Line'])} {line_display_clean}"
+        full_pick_string = f"{r['Pick']} {line_num_str} {line_display_clean}"
+
+    # LINE BOX (FIX): shows the actual number (e.g. "Under 93.5" / "70+") with the
+    # stat name underneath, instead of just repeating the prop name.
+    if "+" in line_display_clean:
+        line_box_main = f"{line_num_str}+"
+    else:
+        line_box_main = f"{pick_side} {line_num_str}"
+    line_box_sub = re.sub(r"^\d+(\.\d+)?\+\s*", "", str(line_display_clean))
+    side_badge_color = "#FF9F0A" if under_bet else "#00E676"
 
     card_top_html = (
         f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-top-left-radius:14px; border-top-right-radius:14px; padding:16px 18px; border-bottom:none;">'
@@ -595,12 +660,12 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
 
         f'<div style="background:#111827; border:1px solid #1E283D; border-radius:10px; padding:10px 14px; margin-bottom:14px;">'
         f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:8px; border-bottom:1px solid #1E283D; padding-bottom:8px;">'
-        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">LINE</div><div style="font-size:16px; font-weight:900; color:#FFFFFF;">{line_display_clean}</div></div>'
+        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">LINE</div><div style="font-size:16px; font-weight:900; color:{side_badge_color};">{line_box_main}</div><div style="font-size:10px; font-weight:700; color:#94A3B8;">{line_box_sub}</div></div>'
         f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">PROJECTION</div><div style="font-size:16px; font-weight:900; color:#00E676;">{format_clean_decimal(r["Model Projection"])}</div></div>'
         f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MARGIN</div><div style="font-size:16px; font-weight:900; color:{margin_color};">{margin_arrow} {margin_val:+0.1f}</div></div>'
         f'</div>'
         f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">'
-        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">HIT RATE</div><div style="font-size:15px; font-weight:900; color:{hit_rate_color};">{hit_rate_display}</div></div>'
+        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">HIT RATE ({pick_side.upper()})</div><div style="font-size:15px; font-weight:900; color:{hit_rate_color};">{hit_rate_display}{hit_rate_sub}</div></div>'
         f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MODEL WIN</div><div style="font-size:15px; font-weight:900; color:{m_prob_color};">{r["Win Prob"]}</div></div>'
         f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">BOOK WIN</div><div style="font-size:15px; font-weight:900; color:{b_prob_color};">{r["Book Win Prob"]}</div></div>'
         f'</div>'
@@ -761,11 +826,11 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
     elif selected_prop_filter == "Pass Attempts":
         props_df = props_df[props_df["Prop Name"].str.contains("Pass Att|Passing Attempts", case=False, na=False)]
     elif selected_prop_filter == "Rushing Yards":
-        props_df = props_df[props_df["Prop Name"].str.contains("Rush Yds|Rushing Yards", case=False, na=False) & ~props_df["Prop Name"].str.contains("Rush\+Rec", case=False, na=False)]
+        props_df = props_df[props_df["Prop Name"].str.contains("Rush Yds|Rushing Yards", case=False, na=False) & ~props_df["Prop Name"].str.contains(r"Rush\+Rec", case=False, na=False)]
     elif selected_prop_filter == "Rush Attempts":
         props_df = props_df[props_df["Prop Name"].str.contains("Rush Att|Carries|Rushing Attempts", case=False, na=False)]
     elif selected_prop_filter == "Receiving Yards":
-        props_df = props_df[props_df["Prop Name"].str.contains("Rec Yds|Receiving Yards", case=False, na=False) & ~props_df["Prop Name"].str.contains("Rush\+Rec", case=False, na=False)]
+        props_df = props_df[props_df["Prop Name"].str.contains("Rec Yds|Receiving Yards", case=False, na=False) & ~props_df["Prop Name"].str.contains(r"Rush\+Rec", case=False, na=False)]
     elif selected_prop_filter == "Receptions":
         props_df = props_df[props_df["Prop Name"].str.contains("Recs|Receptions", case=False, na=False)]
 
@@ -1043,6 +1108,9 @@ elif app_mode == "📋 Master EV Tables":
     render_screen_header("📋 Master EV Tables & Projections")
 
     tab_names = [s for s in excel_data.sheet_names if s != "How To Use"]
+    if not tab_names:
+        st.info("No sheets found in this workbook.")
+        st.stop()
     tabs = st.tabs(tab_names)
 
     for i, sheet_name in enumerate(tab_names):

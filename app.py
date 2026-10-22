@@ -801,6 +801,8 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 "Game Time": game_time_str,
                 "Role Alert": role_alert,
                 "Last 5": last_5,
+                "Last 10": str(r.get("Last 10", "-")),        # 👈 Added
+                "Def vs Pos": str(r.get("Def vs Pos", "-")),  # 👈 Added
                 "Pick": side,
                 "Margin": margin_calc,
                 "EV": format_percentage(ev, is_ev=True),

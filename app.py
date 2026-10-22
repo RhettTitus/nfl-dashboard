@@ -577,20 +577,22 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     hit_rate_sub = ""
     
     s_list = parse_last_5(last_5_raw)
+    s_list_10 = parse_last_5(last_10_raw)
+    
     if s_list:
         hits = sum(game_is_hit(x, float(r["Vegas Line"]), pick_side) for x in s_list)
         pct = round((hits / len(s_list)) * 100)
         arrow = "▲" if pct >= 50 else "▼"
         hit_rate_display = f"{arrow} {pct}%"
         hit_rate_color = "#00E676" if pct >= 50 else "#FF3B30"
-        hit_rate_sub = f'<span style="font-size:10px; font-weight:700; color:#94A3B8;"> {hits}/{len(s_list)} {"U" if under_bet else "O"}</span>'
-
-    # L10 Hit Rate Addition
-    s_list_10 = parse_last_5(last_10_raw)
-    hit_rate_10_sub = ""
-    if s_list_10:
-        hits_10 = sum(game_is_hit(x, float(r["Vegas Line"]), pick_side) for x in s_list_10)
-        hit_rate_10_sub = f'<span style="font-size:10px; font-weight:700; color:#94A3B8;"> | L10: {hits_10}/{len(s_list_10)}</span>'
+        
+        l5_str = f"L5: {hits}/{len(s_list)}"
+        l10_str = ""
+        if s_list_10:
+            hits_10 = sum(game_is_hit(x, float(r["Vegas Line"]), pick_side) for x in s_list_10)
+            l10_str = f" | L10: {hits_10}/{len(s_list_10)}"
+            
+        hit_rate_sub = f'<span style="font-size:9.5px; font-weight:700; color:#94A3B8; white-space:nowrap;"> ({l5_str}{l10_str})</span>'
 
     margin_val = r["Margin"]
     is_pos = margin_val >= 0
@@ -688,7 +690,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
         f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MATCHUP</div><div style="font-size:15px; font-weight:900; color:{dvp_color};">{dvp_val}</div></div>'
         f'</div>'
         f'<div style="display:grid; grid-template-columns: 1.2fr 1fr 1fr; gap:8px;">'
-        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">HIT RATE ({pick_side.upper()[:1]})</div><div style="font-size:14px; font-weight:900; color:{hit_rate_color};">{hit_rate_display}{hit_rate_sub}{hit_rate_10_sub}</div></div>'
+        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">HIT RATE ({pick_side.upper()[:1]})</div><div style="font-size:14px; font-weight:900; color:{hit_rate_color}; white-space:nowrap;">{hit_rate_display}{hit_rate_sub}</div></div>'
         f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MODEL WIN</div><div style="font-size:14px; font-weight:900; color:{m_prob_color};">{r["Win Prob"]}</div></div>'
         f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">BOOK WIN</div><div style="font-size:14px; font-weight:900; color:{b_prob_color};">{r["Book Win Prob"]}</div></div>'
         f'</div>'

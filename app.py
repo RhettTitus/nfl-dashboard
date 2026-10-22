@@ -682,7 +682,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
         f'<div style="background:#111827; border:1px solid #1E283D; border-radius:10px; padding:10px 14px; margin-bottom:14px;">'
         f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px; border-bottom:1px solid #1E283D; padding-bottom:8px;">'
         f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">{prop_header}</div><div style="font-size:15px; font-weight:900; color:{side_badge_color};">{line_box_main}</div></div>'
-        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">PROJ</div><div style="font-size:15px; font-weight:900; color:#00E676;">{format_clean_decimal(r["Model Projection"])}</div></div>'
+        f'<div style="text-align:center;"><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">PROJ</div><div style="font-size:15px; font-weight:900; color:#00E676;">{format_clean_decimal(r["Model Projection"])}</div></div>'
         f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MARGIN</div><div style="font-size:15px; font-weight:900; color:{margin_color};">{margin_arrow} {margin_val:+0.1f}</div></div>'
         f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MATCHUP</div><div style="font-size:15px; font-weight:900; color:{dvp_color};">{dvp_val}</div></div>'
         f'</div>'

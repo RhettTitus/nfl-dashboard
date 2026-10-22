@@ -568,28 +568,29 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     under_bet = is_under_side(pick_side)
     line_num_str = format_clean_decimal(r["Vegas Line"])
 
-    # HIT RATE (FIX): measured for the side actually being bet.
+    # HIT RATE: L5 with strictly corrected 50% neutral logic (Orange), >50% Green, <50% Red
     last_5_raw = str(r.get("Last 5", "")).strip()
-    last_10_raw = str(r.get("Last 10", "")).strip()
-    
     hit_rate_display = "-"
-    hit_rate_color = "#00E676"
+    hit_rate_color = "#94A3B8"
+    hit_rate_sub = ""
     
     s_list = parse_last_5(last_5_raw)
-    s_list_10 = parse_last_5(last_10_raw)
-    
     if s_list:
         hits = sum(game_is_hit(x, float(r["Vegas Line"]), pick_side) for x in s_list)
         pct = round((hits / len(s_list)) * 100)
-        hit_rate_color = "#00E676" if pct >= 50 else "#FF3B30"
         
-        l10_str = ""
-        if s_list_10:
-            hits_10 = sum(game_is_hit(x, float(r["Vegas Line"]), pick_side) for x in s_list_10)
-            pct_10 = round((hits_10 / len(s_list_10)) * 100)
-            l10_str = f" | L10: {pct_10}%"
+        if pct > 50:
+            hit_rate_color = "#00E676"  # Green
+            arrow = "▲"
+        elif pct == 50:
+            hit_rate_color = "#F59E0B"  # Orange / Neutral for 50%
+            arrow = "▶"
+        else:
+            hit_rate_color = "#FF3B30"  # Red
+            arrow = "▼"
             
-        hit_rate_display = f"L5: {pct}%{l10_str}"
+        hit_rate_display = f"{arrow} {pct}%"
+        hit_rate_sub = f'<span style="font-size:10px; font-weight:700; color:#94A3B8;"> ({hits}/{len(s_list)})</span>'
 
     margin_val = r["Margin"]
     is_pos = margin_val >= 0
@@ -637,8 +638,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     else:
         full_pick_string = f"{r['Pick']} {line_num_str} {line_display_clean}"
 
-    # LINE BOX (FIX): shows the actual number (e.g. "Under 93.5" / "70+") with the
-    # stat name underneath, instead of just repeating the prop name.
+    # LINE BOX: shows the actual number with the stat name header
     if "+" in line_display_clean:
         line_box_main = f"{line_num_str}+"
     else:
@@ -686,8 +686,8 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
         f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MARGIN</div><div style="font-size:15px; font-weight:900; color:{margin_color};">{margin_arrow} {margin_val:+0.1f}</div></div>'
         f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MATCHUP</div><div style="font-size:15px; font-weight:900; color:{dvp_color};">{dvp_val}</div></div>'
         f'</div>'
-        f'<div style="display:grid; grid-template-columns: 1.2fr 1fr 1fr; gap:8px;">'
-        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">HIT RATE</div><div style="font-size:14px; font-weight:900; color:{hit_rate_color}; white-space:nowrap;">{hit_rate_display}</div></div>'
+        f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">'
+        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">HIT RATE</div><div style="font-size:14px; font-weight:900; color:{hit_rate_color}; white-space:nowrap;">{hit_rate_display}{hit_rate_sub}</div></div>'
         f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MODEL WIN</div><div style="font-size:14px; font-weight:900; color:{m_prob_color};">{r["Win Prob"]}</div></div>'
         f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">BOOK WIN</div><div style="font-size:14px; font-weight:900; color:{b_prob_color};">{r["Book Win Prob"]}</div></div>'
         f'</div>'
@@ -787,7 +787,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             ev = r.get("EV", "-")
             act = str(r.get("Action", "-"))
             last_5 = str(r.get("Last 5", "-"))
-            last_10 = str(r.get("Last 10", "-"))
             dvp_val = str(r.get("Def vs Pos", "-"))
             script_env = str(r.get("Game Script", "Standard"))
             hist_sig = str(r.get("History Signal", "-"))
@@ -825,7 +824,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 "Game Time": game_time_str,
                 "Role Alert": role_alert,
                 "Last 5": last_5,
-                "Last 10": last_10,
                 "Def vs Pos": dvp_val,
                 "Pick": side,
                 "Margin": margin_calc,

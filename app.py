@@ -569,11 +569,13 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     line_num_str = format_clean_decimal(r["Vegas Line"])
 
     # HIT RATE (FIX): measured for the side actually being bet.
-    # Under pick + 4 of 5 games over the line = 20% (not 80%).
     last_5_raw = str(r.get("Last 5", "")).strip()
+    last_10_raw = str(r.get("Last 10", "")).strip()
+    
     hit_rate_display = "-"
     hit_rate_color = "#00E676"
     hit_rate_sub = ""
+    
     s_list = parse_last_5(last_5_raw)
     if s_list:
         hits = sum(game_is_hit(x, float(r["Vegas Line"]), pick_side) for x in s_list)
@@ -582,6 +584,13 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
         hit_rate_display = f"{arrow} {pct}%"
         hit_rate_color = "#00E676" if pct >= 50 else "#FF3B30"
         hit_rate_sub = f'<span style="font-size:10px; font-weight:700; color:#94A3B8;"> {hits}/{len(s_list)} {"U" if under_bet else "O"}</span>'
+
+    # L10 Hit Rate Addition
+    s_list_10 = parse_last_5(last_10_raw)
+    hit_rate_10_sub = ""
+    if s_list_10:
+        hits_10 = sum(game_is_hit(x, float(r["Vegas Line"]), pick_side) for x in s_list_10)
+        hit_rate_10_sub = f'<span style="font-size:10px; font-weight:700; color:#94A3B8;"> | L10: {hits_10}/{len(s_list_10)}</span>'
 
     margin_val = r["Margin"]
     is_pos = margin_val >= 0
@@ -638,6 +647,19 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     line_box_sub = re.sub(r"^\d+(\.\d+)?\+\s*", "", str(line_display_clean))
     side_badge_color = "#FF9F0A" if under_bet else "#00E676"
 
+    # DVP MATCHUP FORMATTING
+    dvp_val = str(r.get("Def vs Pos", "-"))
+    dvp_color = "#94A3B8"
+    if "th" in dvp_val or "st" in dvp_val or "nd" in dvp_val or "rd" in dvp_val:
+        try:
+            num = int(re.sub(r'\D', '', dvp_val))
+            if num >= 22: dvp_color = "#00E676" # Green for soft matchup
+            elif num <= 10: dvp_color = "#FF3B30" # Red for tough matchup
+            else: dvp_color = "#F59E0B" # Orange for neutral
+        except: pass
+
+    prop_header = str(line_box_sub).upper()[:12] if line_box_sub else "LINE"
+
     card_top_html = (
         f'<div style="background:#0C111C; border:1.5px solid #1E283D; border-top-left-radius:14px; border-top-right-radius:14px; padding:16px 18px; border-bottom:none;">'
         f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">'
@@ -659,15 +681,16 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
         f'</div>'
 
         f'<div style="background:#111827; border:1px solid #1E283D; border-radius:10px; padding:10px 14px; margin-bottom:14px;">'
-        f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:8px; border-bottom:1px solid #1E283D; padding-bottom:8px;">'
-        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">LINE</div><div style="font-size:16px; font-weight:900; color:{side_badge_color};">{line_box_main}</div><div style="font-size:10px; font-weight:700; color:#94A3B8;">{line_box_sub}</div></div>'
-        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">PROJECTION</div><div style="font-size:16px; font-weight:900; color:#00E676;">{format_clean_decimal(r["Model Projection"])}</div></div>'
-        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MARGIN</div><div style="font-size:16px; font-weight:900; color:{margin_color};">{margin_arrow} {margin_val:+0.1f}</div></div>'
+        f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px; border-bottom:1px solid #1E283D; padding-bottom:8px;">'
+        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">{prop_header}</div><div style="font-size:15px; font-weight:900; color:{side_badge_color};">{line_box_main}</div></div>'
+        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">PROJ</div><div style="font-size:15px; font-weight:900; color:#00E676;">{format_clean_decimal(r["Model Projection"])}</div></div>'
+        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MARGIN</div><div style="font-size:15px; font-weight:900; color:{margin_color};">{margin_arrow} {margin_val:+0.1f}</div></div>'
+        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MATCHUP</div><div style="font-size:15px; font-weight:900; color:{dvp_color};">{dvp_val}</div></div>'
         f'</div>'
-        f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">'
-        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">HIT RATE ({pick_side.upper()})</div><div style="font-size:15px; font-weight:900; color:{hit_rate_color};">{hit_rate_display}{hit_rate_sub}</div></div>'
-        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MODEL WIN</div><div style="font-size:15px; font-weight:900; color:{m_prob_color};">{r["Win Prob"]}</div></div>'
-        f'<div><div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">BOOK WIN</div><div style="font-size:15px; font-weight:900; color:{b_prob_color};">{r["Book Win Prob"]}</div></div>'
+        f'<div style="display:grid; grid-template-columns: 1.2fr 1fr 1fr; gap:8px;">'
+        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">HIT RATE ({pick_side.upper()[:1]})</div><div style="font-size:14px; font-weight:900; color:{hit_rate_color};">{hit_rate_display}{hit_rate_sub}{hit_rate_10_sub}</div></div>'
+        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MODEL WIN</div><div style="font-size:14px; font-weight:900; color:{m_prob_color};">{r["Win Prob"]}</div></div>'
+        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">BOOK WIN</div><div style="font-size:14px; font-weight:900; color:{b_prob_color};">{r["Book Win Prob"]}</div></div>'
         f'</div>'
         f'</div>'
         f'</div>'
@@ -765,6 +788,8 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             ev = r.get("EV", "-")
             act = str(r.get("Action", "-"))
             last_5 = str(r.get("Last 5", "-"))
+            last_10 = str(r.get("Last 10", "-"))
+            dvp_val = str(r.get("Def vs Pos", "-"))
             script_env = str(r.get("Game Script", "Standard"))
             hist_sig = str(r.get("History Signal", "-"))
             live_sig = str(r.get("Live Signal", "-"))
@@ -801,8 +826,8 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 "Game Time": game_time_str,
                 "Role Alert": role_alert,
                 "Last 5": last_5,
-                "Last 10": str(r.get("Last 10", "-")),        # 👈 Added
-                "Def vs Pos": str(r.get("Def vs Pos", "-")),  # 👈 Added
+                "Last 10": last_10,
+                "Def vs Pos": dvp_val,
                 "Pick": side,
                 "Margin": margin_calc,
                 "EV": format_percentage(ev, is_ev=True),

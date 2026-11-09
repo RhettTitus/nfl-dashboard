@@ -34,8 +34,7 @@ div[data-testid="stExpander"] summary {
     padding: 10px 16px !important;
 }
 
-/* MASTER EV TABS: previously hidden (display:none) which made the Master EV
-   sheet vanish. Now they are visible and themed to match the dashboard. */
+/* MASTER EV TABS */
 div[data-baseweb="tab-list"] {
     gap: 6px !important;
     background: transparent !important;
@@ -175,7 +174,7 @@ for f in all_raw_files:
         dated_files.append({"filename": f, "date": d, "label": d.strftime("%-m/%-d")})
 
 if not dated_files:
-    st.info("👋 No dated spreadsheets (e.g. 10-9-26.xlsx) found in `./data`. Push a slate from Colab to begin!")
+    st.info("👋 No dated spreadsheets (e.g. 11-9-26.xlsx) found in `./data`. Push a slate from Colab to begin!")
     st.stop()
 
 dated_files.sort(key=lambda x: x["date"], reverse=True)
@@ -191,13 +190,11 @@ def clean_player_name(name):
 @st.cache_data(ttl=86400)
 def load_verified_headshots():
     headshot_map = {}
-    
     sources = [
         ("https://github.com/nflverse/nflverse-data/releases/download/players/players.csv", "display_name", "headshot"),
         ("https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_2024.csv", "full_name", "headshot_url"),
         ("https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_2023.csv", "full_name", "headshot_url")
     ]
-    
     for url, name_col, hs_col in sources:
         try:
             df = pd.read_csv(url, usecols=[name_col, hs_col]).dropna()
@@ -207,7 +204,6 @@ def load_verified_headshots():
                     headshot_map[c_name] = str(row[hs_col])
         except Exception:
             pass
-            
     return headshot_map
 
 headshot_db = load_verified_headshots()
@@ -274,10 +270,14 @@ def format_short_gametime(raw_time_str):
     if not raw_time_str or pd.isna(raw_time_str) or str(raw_time_str).strip() in ["-", "nan", ""]:
         return ""
     try:
-        dt = pd.to_datetime(raw_time_str)
-        day_str = dt.strftime("%a %-m-%-d")
-        hour_str = dt.strftime("%-I:%M%p").replace(":00", "").replace("AM", "am").replace("PM", "pm")
-        return f"{day_str} @ {hour_str}"
+        s = str(raw_time_str).strip()
+        dt = pd.to_datetime(s)
+        has_full_date = bool(re.search(r"\d{4}|\b(mon|tue|wed|thu|fri|sat|sun)\b", s, re.I))
+        if has_full_date:
+            day_str = dt.strftime("%a %-m-%-d")
+            hour_str = dt.strftime("%-I:%M%p").replace(":00", "").replace("AM", "am").replace("PM", "pm")
+            return f"{day_str} @ {hour_str}"
+        return s.replace(" EST", "")
     except:
         return str(raw_time_str).replace(" EST", "")
 
@@ -312,7 +312,6 @@ def extract_sanitized_prop_and_line(r):
         pure_prop = re.sub(r"\(.*?\)", "", pure_prop).strip()
         display_label = f"{int(line_f) if line_f.is_integer() else line_f}+ {pure_prop}"
         return pure_prop, line_f, display_label
-
     else:
         if pd.isna(line_val) or str(line_val).strip().lower() in ["nan", "none", "", "unposted"]:
             return None, None, None
@@ -322,8 +321,7 @@ def extract_sanitized_prop_and_line(r):
             return None, None, None
 
         clean_p = re.sub(r"\(.*?\)", "", raw_str).strip()
-        display_label = f"{clean_p}"
-        return clean_p, line_f, display_label
+        return clean_p, line_f, clean_p
 
 def format_gambly_bet_string(player, side, line, prop_name):
     p = str(player).strip()
@@ -359,11 +357,6 @@ def get_or_calculate_book_prob(book_prob_raw, odds_raw):
             pass
     return None
 
-# --------------------------------------------------------------------------
-# SIDE-AWARE HIT LOGIC (FIX): a game is a "hit" for the BET SIDE, not always Over.
-#   Over  -> stat >= line   (also correct for alt-line milestones like 70+)
-#   Under -> stat <  line
-# --------------------------------------------------------------------------
 def is_under_side(side):
     return str(side).strip().lower() == "under"
 
@@ -389,7 +382,6 @@ file_names = [x["filename"] for x in dated_files]
 selected_file = st.sidebar.selectbox("📅 Select Slate:", file_names, index=0)
 file_path = os.path.join(DATA_FOLDER, selected_file)
 
-# TRUE WORKBOOK IMPORT / CREATION TIMESTAMP
 @st.cache_data(ttl=60)
 def get_file_imported_time(f_path):
     if not os.path.exists(f_path):
@@ -398,7 +390,6 @@ def get_file_imported_time(f_path):
         wb_meta = load_workbook(f_path, read_only=True)
         created_dt = wb_meta.properties.created or wb_meta.properties.modified
         if created_dt:
-            # openpyxl timestamps are naive UTC; convert properly to Eastern (handles EST/EDT)
             if created_dt.tzinfo is None:
                 created_dt = created_dt.replace(tzinfo=timezone.utc)
             est_dt = created_dt.astimezone(ZoneInfo("America/New_York"))
@@ -491,7 +482,7 @@ def tag_best_line_advantages(df):
 
     return df
 
-# PROPS.CASH ADAPTIVE CHART (NOW SIDE-AWARE: green = the bet cashed, red = it missed)
+# PROPS.CASH ADAPTIVE CHART
 def render_props_cash_chart(row, last_5_raw):
     primary_line = float(row["Vegas Line"])
     side = str(row.get("Pick", "Over")).strip()
@@ -515,8 +506,6 @@ def render_props_cash_chart(row, last_5_raw):
         trend_points.append({"Date": d_str, "Value": val})
 
     t_df = pd.DataFrame(trend_points)
-    # FIX: color by whether the BET SIDE hit, so an Under pick shows
-    # bars BELOW the dashed line as green and bars ABOVE it as red.
     hit_label = "Under Hit" if under_bet else "Over Hit"
     miss_label = "Over Miss" if under_bet else "Under Miss"
     t_df["Result"] = t_df["Value"].apply(lambda v: hit_label if game_is_hit(v, primary_line, side) else miss_label)
@@ -555,9 +544,10 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     grade_char = r.get("Grade", "A")
     grade_color = "#00E676" if grade_char in ['A', 'B'] else ("#F59E0B" if grade_char == 'C' else "#FF3B30")
 
-    game_str = r.get("Game", "")
-    short_time = format_short_gametime(r.get("Game Time", ""))
-    time_and_matchup = f"{short_time} • {game_str}" if short_time else game_str
+    # Matchup & Game Time resolution
+    game_str = str(r.get("Matchup", r.get("Game", ""))).strip()
+    short_time = format_short_gametime(r.get("Game Time", r.get("GameTime", "")))
+    time_and_matchup = f"{short_time} • {game_str}" if (short_time and game_str) else (game_str or short_time)
     game_script = r.get("Game Script", "Standard")
     
     role_alert = str(r.get("Role Alert", "")).strip()
@@ -568,7 +558,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     under_bet = is_under_side(pick_side)
     line_num_str = format_clean_decimal(r["Vegas Line"])
 
-    # HIT RATE: L5 with strictly corrected 50% neutral logic (Orange), >50% Green, <50% Red
+    # HIT RATE
     last_5_raw = str(r.get("Last 5", "")).strip()
     hit_rate_display = "-"
     hit_rate_color = "#94A3B8"
@@ -580,13 +570,13 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
         pct = round((hits / len(s_list)) * 100)
         
         if pct > 50:
-            hit_rate_color = "#00E676"  # Green
+            hit_rate_color = "#00E676"
             arrow = "▲"
         elif pct == 50:
-            hit_rate_color = "#F59E0B"  # Orange / Neutral for 50%
+            hit_rate_color = "#F59E0B"
             arrow = "▶"
         else:
-            hit_rate_color = "#FF3B30"  # Red
+            hit_rate_color = "#FF3B30"
             arrow = "▼"
             
         hit_rate_display = f"{arrow} {pct}%"
@@ -638,7 +628,6 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     else:
         full_pick_string = f"{r['Pick']} {line_num_str} {line_display_clean}"
 
-    # LINE BOX: shows the actual number with the stat name header
     if "+" in line_display_clean:
         line_box_main = f"{line_num_str}+"
     else:
@@ -646,15 +635,23 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     line_box_sub = re.sub(r"^\d+(\.\d+)?\+\s*", "", str(line_display_clean))
     side_badge_color = "#FF9F0A" if under_bet else "#00E676"
 
-    # DVP MATCHUP FORMATTING
-    dvp_val = str(r.get("Def vs Pos", "-"))
+    # RESOLVE 4th STAT TILE ("MATCHUP"):
+    # If Def vs Pos rank is present, display it; otherwise display the Opponent / Matchup abbreviation
+    dvp_raw = r.get("Def vs Pos")
+    if pd.notna(dvp_raw) and str(dvp_raw).strip() not in ["-", "nan", "None", ""]:
+        dvp_val = str(dvp_raw)
+    elif game_str:
+        dvp_val = game_str
+    else:
+        dvp_val = str(r.get("Team", "NFL"))
+
     dvp_color = "#94A3B8"
-    if "th" in dvp_val or "st" in dvp_val or "nd" in dvp_val or "rd" in dvp_val:
+    if any(suffix in dvp_val for suffix in ["th", "st", "nd", "rd"]):
         try:
             num = int(re.sub(r'\D', '', dvp_val))
-            if num >= 22: dvp_color = "#00E676" # Green for soft matchup
-            elif num <= 10: dvp_color = "#FF3B30" # Red for tough matchup
-            else: dvp_color = "#F59E0B" # Orange for neutral
+            if num >= 22: dvp_color = "#00E676"
+            elif num <= 10: dvp_color = "#FF3B30"
+            else: dvp_color = "#F59E0B"
         except: pass
 
     prop_header = str(line_box_sub).upper()[:12] if line_box_sub else "LINE"
@@ -684,7 +681,7 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
         f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">{prop_header}</div><div style="font-size:15px; font-weight:900; color:{side_badge_color};">{line_box_main}</div></div>'
         f'<div style="text-align:center;"><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">PROJ</div><div style="font-size:15px; font-weight:900; color:#00E676;">{format_clean_decimal(r["Model Projection"])}</div></div>'
         f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MARGIN</div><div style="font-size:15px; font-weight:900; color:{margin_color};">{margin_arrow} {margin_val:+0.1f}</div></div>'
-        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MATCHUP</div><div style="font-size:15px; font-weight:900; color:{dvp_color};">{dvp_val}</div></div>'
+        f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">MATCHUP</div><div style="font-size:14px; font-weight:900; color:{dvp_color};">{dvp_val}</div></div>'
         f'</div>'
         f'<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">'
         f'<div><div style="font-size:9.5px; color:#94A3B8; font-weight:800; letter-spacing:0.4px;">HIT RATE</div><div style="font-size:14px; font-weight:900; color:{hit_rate_color}; white-space:nowrap;">{hit_rate_display}{hit_rate_sub}</div></div>'
@@ -711,11 +708,11 @@ def render_props_cash_book_card(r, player, player_depth_label, headshot_url, chk
     st.markdown(card_bot_html, unsafe_allow_html=True)
     st.checkbox(f"➕ Add to {r['Book']} Slip", key=chk_key)
 
-# MASTER VISUALIZER WITH MATCHUP & DETAILED CATEGORY FILTERS
+# MASTER VISUALIZER WITH RESILIENT MATCHUP & CATEGORY FILTERS
 def render_prop_visualizer(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
-    game_col = next((c for c in ["Game", "game"] if c in combined_df.columns), None)
+    game_col = next((c for c in ["Matchup", "matchup", "Game", "game"] if c in combined_df.columns), None)
 
     f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns([1.2, 1, 1, 1, 1.2])
     with f_col1:
@@ -772,8 +769,10 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             pos_val = str(r.get(pos_col, "")).strip()
             book = str(r.get("Book", "DraftKings")).strip()
             grade_val = str(r.get("Grade", "A")).strip()
-            game_str = str(r.get("Game", "")).strip()
-            game_time_str = str(r.get("Game Time", "")).strip()
+            
+            # Robust matchup detection
+            game_str = str(r.get("Matchup", r.get("Game", ""))).strip()
+            game_time_str = str(r.get("Game Time", r.get("GameTime", r.get("Kickoff", "")))).strip()
             
             raw_role = str(r.get("Role Alert", "")).strip()
             role_alert = "" if raw_role.lower() in ["nan", "none", "", "null"] else raw_role
@@ -821,6 +820,7 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 "Model Projection": proj_f,
                 "Grade": grade_val,
                 "Game": game_str,
+                "Matchup": game_str,
                 "Game Time": game_time_str,
                 "Role Alert": role_alert,
                 "Last 5": last_5,
@@ -905,7 +905,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
 
     unique_players = sorted(props_df["Player"].unique())
 
-    # PROPS STACKED VERTICALLY ONE UNDER THE OTHER FOR EACH PLAYER
     for player in unique_players:
         p_props = props_df[props_df["Player"] == player]
         team_tag = p_props["Team"].iloc[0] if not p_props.empty else ""
@@ -937,7 +936,6 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
                 else:
                     st.markdown(f'<div style="background:#0C111C; border:1.5px dashed #1E283D; border-radius:14px; padding:32px; text-align:center; color:#94A3B8; margin-bottom:16px;"><span style="color:#0091FF; font-weight:800;">🔵 FanDuel</span>: No line posted for {prop_name} ({player})</div>', unsafe_allow_html=True)
 
-    # BACK TO TOP BUTTON
     st.markdown("""
         <div style="text-align:center; margin: 36px 0 20px 0;">
             <a href="#top_of_page" style="background:#151D2A; border:1.5px solid #2B3A52; color:#FFFFFF; padding:10px 24px; border-radius:24px; text-decoration:none; font-weight:800; font-size:0.9rem; box-shadow:0 4px 12px rgba(0,0,0,0.4);">
@@ -969,7 +967,7 @@ elif app_mode == "⚡ Pro Visualizer: Alt Lines":
         render_prop_visualizer(alt_df, is_alt_mode=True)
 
 # ==============================================================================
-# SCREEN 3: BEST OF THE BEST (SKIP UNPOSTED ALT PROPS & PROBABILITY COLOR CODED)
+# SCREEN 3: BEST OF THE BEST (WITH MATCHUP DISPLAY INCLUDED)
 # ==============================================================================
 elif app_mode == "💎 Best of the Best (Top Edges)":
     render_screen_header("💎 Best of the Best (Top Conviction Plays)")
@@ -1109,6 +1107,11 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                 else:
                     full_pick_string = f"{side_clean} {line_display} {display_label}"
 
+                # Resolved Matchup & Time
+                game_str = str(row.get("Matchup", row.get("Game", ""))).strip()
+                game_time_str = format_short_gametime(row.get("Game Time", row.get("GameTime", "")))
+                time_matchup_line = f"{game_time_str} • {game_str}" if (game_time_str and game_str) else (game_str or game_time_str)
+
                 with st.container(border=True):
                     c1, c2, c3, c4 = st.columns([1, 4, 3, 3])
                     with c1:
@@ -1116,6 +1119,8 @@ elif app_mode == "💎 Best of the Best (Top Edges)":
                         else: st.markdown("### 🏈")
                     with c2:
                         st.markdown(f"<div style='font-size:1.15rem; font-weight:800; color:#FFFFFF;'>#{rank} {p_name}</div>", unsafe_allow_html=True)
+                        if time_matchup_line:
+                            st.markdown(f"<div style='font-size:0.82rem; font-weight:700; color:#94A3B8; margin-bottom:3px;'>⚔️ {time_matchup_line}</div>", unsafe_allow_html=True)
                         st.markdown(f"📌 {prop_n} [{book_s}]", unsafe_allow_html=True)
                         st.caption(f"Action: `{row.get('Action', 'STRONG BET')}`")
                     with c3:
@@ -1184,6 +1189,6 @@ elif app_mode == "📋 Master EV Tables":
                 elif col == "Odds":
                     df[col] = df[col].apply(format_american_odds)
 
-            df = df.drop(columns=[c for c in ["GameSortKey", "SortScore", "CleanName"] if c in df.columns])
+            df = df.drop(columns=[c for c in ["GameSortKey", "SortScore", "CleanName", "_pk", "_ev_val"] if c in df.columns], errors='ignore')
 
             st.dataframe(df, use_container_width=True, height=380)

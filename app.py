@@ -713,8 +713,9 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
     team_col = next((c for c in ["Team", "team"] if c in combined_df.columns), None)
     pos_col = next((c for c in ["Pos", "Position"] if c in combined_df.columns), None)
     game_col = next((c for c in ["Matchup", "matchup", "Game", "game"] if c in combined_df.columns), None)
+    action_col = "Action" if "Action" in combined_df.columns else None
 
-    f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns([1.2, 1, 1, 1, 1.2])
+    f_col1, f_col2, f_col3, f_col4, f_col5, f_col6 = st.columns([1.2, 1, 1, 1, 1.2, 1.1])
     with f_col1:
         matchup_list = ["All Matchups"] + sorted(combined_df[game_col].dropna().astype(str).unique().tolist()) if game_col else ["All Matchups"]
         selected_matchup = st.selectbox("⚔️ Matchup:", matchup_list, key=f"m_{is_alt_mode}")
@@ -736,6 +737,13 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
             "Receptions"
         ]
         selected_prop_filter = st.selectbox("📊 Prop Category:", prop_categories, key=f"cat_{is_alt_mode}")
+    with f_col6:
+        action_categories = (
+            ["All Actions", "SGP ANCHOR", "SGP BOOSTER", "LADDER FLYER", "Solid Leg"]
+            if is_alt_mode
+            else ["All Actions", "MAX BET", "STRONG BET", "SMALL BET", "SKIP"]
+        )
+        selected_action = st.selectbox("⚡ Action:", action_categories, key=f"act_{is_alt_mode}")
 
     filtered_df = combined_df.copy()
     if game_col and selected_matchup != "All Matchups":
@@ -746,6 +754,8 @@ def render_prop_visualizer(combined_df, is_alt_mode=False):
         filtered_df = filtered_df[filtered_df[pos_col].astype(str).str.contains(selected_pos, case=False, na=False)]
     if selected_book != "All Sportsbooks":
         filtered_df = filtered_df[filtered_df["Book"].astype(str) == selected_book]
+    if action_col and selected_action != "All Actions":
+        filtered_df = filtered_df[filtered_df[action_col].astype(str).str.contains(selected_action, case=False, na=False)]
 
     prop_rows = []
     for _, r in filtered_df.iterrows():
